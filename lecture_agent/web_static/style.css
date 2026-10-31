@@ -130,13 +130,11 @@ svg.icon { width: 1.1em; height: 1.1em; flex: none; vertical-align: -.18em; }
   backdrop-filter: saturate(1.6) blur(14px); -webkit-backdrop-filter: saturate(1.6) blur(14px);
   border-bottom: 1px solid color-mix(in srgb, var(--line) 80%, transparent);
 }
-.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font: 700 1rem var(--font-display); letter-spacing: -.01em; white-space: nowrap; }
-.brand-mark {
-  width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none;
-  background: var(--grad); color: #fff;
-  box-shadow: 0 6px 18px -4px color-mix(in srgb, var(--primary) 60%, transparent), inset 0 1px 0 rgba(255,255,255,.35);
-}
-.brand-mark svg { width: 19px; height: 19px; }
+.brand { display: flex; align-items: center; gap: 12px; color: var(--ink); text-decoration: none; white-space: nowrap; }
+.brand-name { font: 800 1.12rem var(--font-display); letter-spacing: -.02em; }
+.brand-tag { padding-left: 12px; border-left: 1px solid var(--line-strong); color: var(--muted); font-size: .86rem; font-weight: 500; }
+.brand:hover .brand-name { color: var(--primary); }
+@media (max-width: 760px) { .brand-tag { display: none; } }
 .nav-sep { color: var(--line-strong); font-size: 1.2rem; }
 .nav-title { font-weight: 600; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; font-size: .95rem; }
 .nav-spacer { flex: 1; }
