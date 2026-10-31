@@ -130,8 +130,10 @@ $env:LECTURE_AWS_PROFILE = "my-profile"
 ```
 
 Open <http://127.0.0.1:8000>, choose or drag in a video or audio file (MP4,
-MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), pick the spoken language, and
-press **Make my notes**. Each upload makes paid Transcribe and Bedrock calls on
+MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), choose how many quiz questions you
+want, and press **Make my notes**. The web app is for English lectures: it
+transcribes English and writes the notes, quiz and chat in English. (The
+command line still has `--language` and `--notes-language`.) Each upload makes paid Transcribe and Bedrock calls on
 the AWS account the server prints when it starts.
 
 While a job runs, the page shows each step with its time, a count of verified

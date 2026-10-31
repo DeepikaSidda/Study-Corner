@@ -39,7 +39,7 @@
       <ul class="trust">
         <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Every quiz answer is checked against the teacher's own words</li>
         <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Reads the board and slides, formulas included</li>
-        <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Notes in the language you learn best in</li>
+        <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Download the notes and quiz as a PDF</li>
       </ul>
     </div>
 
@@ -66,15 +66,10 @@
       </label>
 
       <div class="fields">
-        <label class="field">Spoken language
-          <select name="language">{{LANGUAGE_OPTIONS}}</select>
-        </label>
-        <label class="field">Write notes in
-          <input type="text" name="notes_language" value="English" maxlength="40">
-        </label>
-        <label class="field">Questions
+        <label class="field">Quiz questions
           <input type="number" name="questions" value="10" min="3" max="20">
         </label>
+        <p class="field-note muted small">For lectures in English. Notes, quiz and chat are written in English.</p>
       </div>
 
       {{ACCOUNT}}

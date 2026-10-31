@@ -36,8 +36,8 @@ STATIC = Path(__file__).parent / "web_static"
 MAX_UPLOAD_MB = int(os.environ.get("LECTURE_MAX_UPLOAD_MB", "2048"))
 VIDEO_TYPES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 AUDIO_TYPES = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
-LANGUAGES = {"en-US": "English (US)", "en-IN": "English (India)", "en-GB": "English (UK)",
-             "hi-IN": "Hindi", "te-IN": "Telugu", "ta-IN": "Tamil", "auto": "Detect automatically"}
+LECTURE_LANGUAGE = "en-US"  # Amazon Transcribe language code
+NOTES_LANGUAGE = "English"
 JOB_ID = re.compile(r"^[0-9a-f]{12}$")
 FRAME_NAME = re.compile(r"^f_\d{5}\.jpg$")
 
@@ -192,7 +192,6 @@ def _lecture_card(job: dict) -> str:
 async def index(request: Request) -> HTMLResponse:
     jobs = sorted(_jobs.values(), key=lambda j: j["created"], reverse=True)[:12]
     rows = [_lecture_card(job) for job in jobs]
-    options = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in LANGUAGES.items())
     # Only shown when something is wrong; the account and model are printed
     # in the terminal when the server starts.
     if _account.get("error"):
@@ -205,7 +204,6 @@ async def index(request: Request) -> HTMLResponse:
         "index.html",
         ACCOUNT=account,
         DISABLED=disabled,
-        LANGUAGE_OPTIONS=options,
         ACCEPT=",".join(sorted(VIDEO_TYPES | AUDIO_TYPES)),
         MAX_MB=str(MAX_UPLOAD_MB),
         JOBS="".join(rows) or (
@@ -232,10 +230,10 @@ async def upload(request: Request) -> Response:
     suffix = Path(original).suffix.lower()
     if suffix not in VIDEO_TYPES | AUDIO_TYPES:
         return HTMLResponse(f"Unsupported file type {escape(suffix)}.", status_code=400)
-    language = str(form.get("language") or "en-US")
-    if language not in LANGUAGES:
-        return HTMLResponse("Unknown language.", status_code=400)
-    notes_language = re.sub(r"[^\w \-()]", "", str(form.get("notes_language") or "English"))[:40] or "English"
+    # The web app is English only: lectures are transcribed as English and the
+    # notes, quiz and chat are written in English. Any language fields sent
+    # with the form are ignored.
+    language, notes_language = LECTURE_LANGUAGE, NOTES_LANGUAGE
     try:
         questions = max(3, min(20, int(form.get("questions") or 10)))
     except ValueError:
