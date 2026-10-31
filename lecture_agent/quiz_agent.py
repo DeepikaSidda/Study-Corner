@@ -205,4 +205,31 @@ def build_quiz(
         "tokens": usage.get("totalTokens"),
         "rejected": book.failures,
     }
-    return book.accepted, stats
+    return spread_answers(book.accepted), stats
+
+
+def spread_answers(questions: list[QuizQuestion]) -> list[QuizQuestion]:
+    """Reorder multiple-choice options so the right answer is not always A.
+
+    Models nearly always write the correct option first. The answer moves to a
+    rotating position (A, B, C, D, ...) from a seeded start, and the wrong options
+    are shuffled, so the same quiz always comes out in the same order.
+    """
+    import hashlib
+    import random
+
+    seed = hashlib.sha256("|".join(q.question for q in questions).encode("utf-8")).digest()
+    rng = random.Random(seed)
+    slot = rng.randrange(4)
+    out = []
+    for q in questions:
+        if q.kind != "multiple_choice" or q.answer not in q.options:
+            out.append(q)
+            continue
+        wrong = [o for o in q.options if o != q.answer]
+        rng.shuffle(wrong)
+        position = slot % len(q.options)
+        wrong.insert(position, q.answer)
+        slot += 1 + (rng.random() < 0.3)  # mostly rotate, sometimes skip a letter
+        out.append(q.model_copy(update={"options": wrong}))
+    return out

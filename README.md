@@ -131,20 +131,26 @@ $env:LECTURE_AWS_PROFILE = "my-profile"
 
 Open <http://127.0.0.1:8000>, choose or drag in a video or audio file (MP4,
 MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), pick the spoken language, and
-press **Make notes**. Each upload makes paid Transcribe and Bedrock calls on
+press **Make my notes**. Each upload makes paid Transcribe and Bedrock calls on
 the AWS account the server prints when it starts.
 
-The job page shows each step while it runs. When it finishes, the video sits
-next to the notes in tabs: Summary and key points, Full notes, Key terms,
-Board (each slide image with its text), an interactive Quiz, **Ask**, and a
-Quality report. Every ▶ time jumps the video to that moment, and a wrong quiz
-answer offers "Rewatch from 00:40".
+While a job runs, the page shows each step with its time, a count of verified
+quiz questions, and a live activity feed. When it finishes, the video sits
+next to a chapter list and a timeline, with the notes in tabs: Summary and key
+points, Full notes, Key terms, Board (each slide image with its text), an
+interactive Quiz, **Ask**, and a Quality report. Every ▶ time jumps the video
+to that moment, and a wrong quiz answer offers "Rewatch from 00:40". Keys:
+`1`–`7` switch tabs, `K` plays or pauses, `/` jumps to Ask. The moon/sun
+button switches between dark and light mode, and the choice is remembered.
 
-Under the video, **Show notes** opens the whole set of notes and the quiz as one
-readable page, with buttons to copy all the text or print it, and **Download
-PDF** gives the same content as a PDF: notes first, then the quiz on its own
-page, then the answer key. The PDF is built the first time it is asked for and
-reused after that.
+**Show notes** (next to the title) opens the whole set of notes and the quiz as
+one readable page with a contents list, and buttons to copy all the text or
+print it. **Download PDF** gives the same content as a PDF: notes first, then
+the quiz on its own page, then the answer key. The PDF is built the first time
+it is asked for and reused after that.
+
+Models nearly always put the right answer first, so the quiz moves it to a
+different letter in each question (the order is fixed per quiz).
 
 **Ask** is a chat that answers only from this lecture: "where does carbon
 dioxide get in?" → "through tiny holes called stomata ▶ 00:18". It shows which

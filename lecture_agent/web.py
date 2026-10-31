@@ -130,18 +130,68 @@ def _queued():
     return (j["id"] for j in sorted(_jobs.values(), key=lambda j: j["created"]) if j["status"] == "queued")
 
 
+_summaries: dict[str, tuple[float, dict]] = {}
+
+
+def _summary(job: dict) -> dict:
+    """Title, length, question count and thumbnail of a finished lecture.
+
+    Read from lecture.json and cached until that file changes.
+    """
+    path = _job_dir(job["id"]) / "lecture.json"
+    if job["status"] != "done" or not path.exists():
+        return {}
+    mtime = path.stat().st_mtime
+    cached = _summaries.get(job["id"])
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    boards = data.get("board") or []
+    frame = boards[0]["frame"] if boards else None
+    if frame is None:
+        frames = sorted((_job_dir(job["id"]) / "frames").glob("f_*.jpg"))
+        frame = frames[0].name if frames else None
+    summary = {
+        "title": data["notes"]["title"],
+        "seconds": data.get("metrics", {}).get("lecture_seconds"),
+        "questions": len(data.get("quiz", [])),
+        "frame": frame if frame and FRAME_NAME.match(frame) else None,
+    }
+    _summaries[job["id"]] = (mtime, summary)
+    return summary
+
+
+def _lecture_card(job: dict) -> str:
+    from .transcript import fmt_time
+
+    info = _summary(job)
+    status = escape(job["status"])
+    when = time.strftime("%d %b, %H:%M", time.localtime(job["created"]))
+    title = escape(info.get("title") or job["original_name"])
+    if info.get("frame"):
+        thumb = f'<img src="/jobs/{job["id"]}/frames/{info["frame"]}" alt="" loading="lazy">'
+    else:
+        thumb = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'
+                 '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>')
+    duration = f'<span class="dur">{fmt_time(info["seconds"])}</span>' if info.get("seconds") else ""
+    parts = [when]
+    if info.get("questions"):
+        parts.append(f"{info['questions']} questions")
+    if info.get("title"):
+        parts.append(escape(job["original_name"]))
+    return (
+        f'<a class="lecture-card" href="/jobs/{job["id"]}">'
+        f'<span class="thumb">{thumb}<span class="badge {status}">{status}</span>{duration}</span>'
+        f'<span class="lc-body"><b>{title}</b><span class="lc-meta">{" · ".join(parts)}</span></span></a>'
+    )
+
+
 async def index(request: Request) -> HTMLResponse:
-    rows = []
-    icon = ('<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
-            '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>')
-    for job in sorted(_jobs.values(), key=lambda j: j["created"], reverse=True)[:12]:
-        when = time.strftime("%d %b, %H:%M", time.localtime(job["created"]))
-        status = escape(job["status"])
-        rows.append(
-            f'<a class="lecture" href="/jobs/{job["id"]}"><span class="ic">{icon}</span>'
-            f'<span class="name">{escape(job["original_name"])}<span class="when">{when}</span></span>'
-            f'<span class="badge {status}">{status}</span></a>'
-        )
+    jobs = sorted(_jobs.values(), key=lambda j: j["created"], reverse=True)[:12]
+    rows = [_lecture_card(job) for job in jobs]
     options = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in LANGUAGES.items())
     # Only shown when something is wrong; the account and model are printed
     # in the terminal when the server starts.
@@ -158,7 +208,11 @@ async def index(request: Request) -> HTMLResponse:
         LANGUAGE_OPTIONS=options,
         ACCEPT=",".join(sorted(VIDEO_TYPES | AUDIO_TYPES)),
         MAX_MB=str(MAX_UPLOAD_MB),
-        JOBS="".join(rows) or '<p class="empty">No lectures yet. Upload one to get started.</p>',
+        JOBS="".join(rows) or (
+            '<div class="empty" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" '
+            'stroke-width="1.6"><rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>'
+            'No lectures yet. Upload your first one above.</div>'
+        ),
     )
 
 
@@ -339,7 +393,7 @@ async def chat_api(request: Request) -> Response:
 
 async def static(request: Request) -> Response:
     name = request.path_params["name"]
-    if name not in ("style.css", "job.js"):
+    if name not in ("style.css", "job.js", "app.js", "notes.js"):
         return Response(status_code=404)
     return FileResponse(STATIC / name)
 
