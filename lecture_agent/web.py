@@ -24,11 +24,12 @@ from html import escape
 from pathlib import Path
 
 from starlette.applications import Starlette
+from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import config, pipeline
+from . import chat, config, pipeline
 
 WEB_DIR = Path(os.environ.get("LECTURE_WEB_DIR", "output/web")).resolve()
 STATIC = Path(__file__).parent / "web_static"
@@ -261,6 +262,53 @@ async def frame(request: Request) -> Response:
     return FileResponse(path) if path.exists() else Response(status_code=404)
 
 
+_chat_locks: dict[tuple[str, str], threading.Lock] = {}
+
+
+def _chat_lock(job_id: str, student: str) -> threading.Lock:
+    # One question at a time per student, so two tabs cannot write the same
+    # session files at once.
+    with _lock:
+        return _chat_locks.setdefault((job_id, student), threading.Lock())
+
+
+async def chat_api(request: Request) -> Response:
+    """GET: the student's saved conversation. POST: ask a question."""
+    job = _get_job(request)
+    if job is None or job["status"] != "done":
+        return JSONResponse({"error": "This lecture is not ready yet."}, status_code=404)
+    folder = _job_dir(job["id"])
+    language = job["options"]["notes_language"]
+
+    if request.method == "GET":
+        student = request.query_params.get("student", "")
+        if not chat.STUDENT_ID.match(student):
+            return JSONResponse({"error": "invalid student id"}, status_code=400)
+        return JSONResponse({"turns": await run_in_threadpool(chat.history, folder, student, language)})
+
+    try:
+        body = await request.json()
+    except ValueError:
+        return JSONResponse({"error": "Send JSON."}, status_code=400)
+    student = str(body.get("student", ""))
+    question = str(body.get("message", "")).strip()
+    if not chat.STUDENT_ID.match(student):
+        return JSONResponse({"error": "invalid student id"}, status_code=400)
+    if not question or len(question) > chat.MAX_QUESTION_CHARS:
+        return JSONResponse({"error": f"Ask a question of 1 to {chat.MAX_QUESTION_CHARS} characters."}, status_code=400)
+
+    def answer():
+        with _chat_lock(job["id"], student):
+            return chat.ask(folder, student, question, language)
+
+    try:
+        result = await run_in_threadpool(answer)
+    except Exception as exc:  # noqa: BLE001 - shown to the student, trace on the console
+        traceback.print_exc()
+        return JSONResponse({"error": f"Could not answer: {str(exc)[:200]}"}, status_code=500)
+    return JSONResponse(result)
+
+
 async def static(request: Request) -> Response:
     name = request.path_params["name"]
     if name not in ("style.css", "job.js"):
@@ -273,6 +321,7 @@ routes = [
     Route("/upload", upload, methods=["POST"]),
     Route("/jobs/{job_id}", job_page),
     Route("/api/jobs/{job_id}", job_api),
+    Route("/api/jobs/{job_id}/chat", chat_api, methods=["GET", "POST"]),
     Route("/jobs/{job_id}/files/{name}", job_file),
     Route("/jobs/{job_id}/frames/{name}", frame),
     Route("/static/{name}", static),

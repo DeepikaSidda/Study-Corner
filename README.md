@@ -20,34 +20,64 @@ tells them which part to rewatch.
 ```
 lecture.mp4
   │
-  ├─ listen ─ audio ─► Amazon Transcribe ─► timestamped sentences  S1, S2, S3 …
+  ├─ listen ─ audio ─► Amazon Transcribe ─► timestamped lines  S1, S2, S3 …
   │
-  ├─ look ── frames every N s ─► slide-change detection ─► board reader agent
-  │                              (code: keeps only frames     (reads text, formulas,
-  │                               where the board changed)      diagrams)
+  ├─ look ── frames ─► slide-change detection (code) ─► board reader agent (vision)
   │
   ├─ notes ─ note writer agent ─► citations checked in code ─► coverage measured
   │
-  ├─ quiz ── quiz writer agent ─► code checks ─► judge agent ─► rewrite loop
-  │                               │ quote really in the cited lines?
-  │                               │ answer is one of the options?
-  │                               └ failures go back with the reasons, max 2 rounds
+  ├─ quiz ── QUIZ AGENT (tool loop)
+  │            tools: list_sections · read_transcript · search_transcript · check_question
+  │                                                                        │
+  │            check_question = code checks ─► duplicate check ─► JUDGE AGENT
+  │                             (quote really in the cited lines?)   (agent used as a tool)
+  │            steering: may not stop until the quiz is full
+  │            hooks: per-tool and model-call budget · Limits: turns and tokens
   │
-  └─ render ─► notes.md  +  lecture.json
+  └─ render ─► notes.md + lecture.json
+
+then, in the web app:
+
+  ASK THE LECTURE ─ chat agent with the same lecture tools
+                    steering: every [mm:ss] cited must be a time a tool showed it
+                    session manager: each student's conversation is saved
 ```
 
-The order of steps is fixed in Python, not chosen by a model. Every model
-output is checked by code before the next step relies on it:
+The order of the main steps is fixed in Python, because it is known in
+advance. Inside the quiz and chat steps, the agents decide what to read and
+when; deterministic code decides what they are allowed to keep.
 
-- **Each note cites transcript sentence numbers.** Citations to sentences that
-  don't exist are removed. A key point, term or example with no valid source
-  is dropped, because it may be something the model added.
-- **Every quiz question carries an evidence quote.** Code checks that the
-  quote appears in the cited sentences (exact, or a near match tolerating a
-  dropped word, but not a paraphrase). Only questions that pass go to the judge
-  agent, which checks the cited lines prove the answer. Questions that fail are
-  rewritten with the reasons, and anything still failing after two rounds is
-  dropped. The quiz that ships contains only questions that passed both checks.
+## How it uses Strands
+
+| Strands feature | Where | What it does here |
+|---|---|---|
+| `Agent` + structured output | `agents.py` | board reader (vision), note writer and judge each return a fixed schema |
+| `@tool` | `tools.py`, `quiz_agent.py` | `search_transcript`, `read_transcript`, `list_sections`, `read_board`, `check_question`, all bound to one lecture |
+| Agent as a tool | `check_question` | calls the judge agent, so the quiz agent cannot mark its own homework |
+| Hooks | `guards.py` `BudgetHook` | caps calls per tool and model calls per request; a cancelled call tells the agent why |
+| Hooks | `guards.py` `TraceHook` | records every tool call, shown in the UI and the quality report |
+| Steering (`steer_after_model`) | `QuizCompletion` | blocks the quiz agent from finishing before enough questions have passed |
+| Steering (`steer_after_model`) | `CitationCheck` | rejects a chat answer that cites a time no tool showed the agent, or a range it cannot verify |
+| `Limits` | quiz and chat agents | hard ceiling on turns and tokens per run |
+| `FileSessionManager` | `chat.py` | saves each student's conversation; follow-ups work after a restart |
+| `SlidingWindowConversationManager` | `chat.py` | keeps long chats inside the context window |
+| Strands Evals | `tools/evaluate.py` | `OutputEvaluator` and `TrajectoryEvaluator` score the chat agent |
+
+## Grounding: what code checks
+
+- **Notes cite transcript line numbers.** Citations to lines that don't exist
+  are removed. A key point, term or example with no valid source is dropped.
+- **Every quiz question carries an evidence quote.** `check_question` confirms
+  in code that the quote is in the cited lines (exact, or a near match
+  tolerating a dropped word, never a paraphrase), that a multiple-choice answer
+  is one of the options, and that the question does not test a fact already
+  used. Only then does the judge agent check the lines prove the answer. The
+  quiz agent sees every failure reason and fixes the question or picks another
+  fact.
+- **Chat citations are verified.** Each `[03:14]` must be the start time of a
+  transcript line, a board time or a section start that a tool returned in that
+  request. Steering sends the agent back up to twice; anything still
+  unverifiable is removed before the student sees it.
 
 ## What you get
 
@@ -105,9 +135,16 @@ the box confirming the run may spend on the AWS account shown, and press
 
 The job page shows each step while it runs. When it finishes, the video sits
 next to the notes in tabs: Summary and key points, Full notes, Key terms,
-Board (each slide image with its text), an interactive Quiz, and a Quality
-report. Every ▶ time jumps the video to that moment, and a wrong quiz answer
-offers "Rewatch from 00:40". Notes download as `.md` or `.json`.
+Board (each slide image with its text), an interactive Quiz, **Ask**, and a
+Quality report. Every ▶ time jumps the video to that moment, and a wrong quiz
+answer offers "Rewatch from 00:40". Notes download as `.md` or `.json`.
+
+**Ask** is a chat that answers only from this lecture: "where does carbon
+dioxide get in?" → "through tiny holes called stomata ▶ 00:18". It shows which
+tools it used, refuses questions the lecture doesn't cover, and remembers the
+conversation, so "and where does the water come from?" works. Each browser
+gets its own conversation; add `?student=<id>` to the page address to reopen
+one on another device. Every question is a paid model call.
 
 Jobs run one at a time so uploads queue instead of multiplying the spend.
 Each job is kept in `output/web/<job id>/` and stays listed after a restart.
@@ -158,30 +195,66 @@ ground truth:
 | Section timestamps vs real slide starts | all 5 within 0.1 s |
 | Board reading vs real slide text | 5 of 5 slides read 100% correctly, including the equation |
 | Notes coverage | 14 of 14 transcript segments cited |
-| Quiz | 8 of 8 questions verified; evidence quotes found word for word |
-| Time | 82 s with transcription, 53 s when the transcript is cached, for a 65 s lecture |
-| Cleanup | audio deleted from S3 and Transcribe job removed after the run |
+| Quiz agent, 8 questions | 8 of 8 verified from 8 checks; 5 `read_transcript` calls |
+| Quiz agent, 12 questions (more than this short lecture holds) | 12 of 12 from 15 checks: 3 repeats of an already-used fact rejected, the agent then found new facts |
+| Full run | 80 s for the 65 s lecture, including transcription |
+| Cleanup | audio deleted from S3 and Transcribe job removed after each run |
 
-One problem found in the first real run and fixed: the model "quoted" the
-teacher as saying *"Chlorophyll traps the energy of sunlight"* when the teacher
-said *"It traps the energy of sunlight"*. That is close enough to pass as a
-near match, but it is not the teacher's words. The answer key now shows the
-matching sentence from the transcript, never the model's version, and the
-quality report counts how often that happened.
+### Chat agent, measured with Strands Evals
+
+`tools/evaluate.py`: 7 student questions, each scored by `OutputEvaluator`
+(correct, grounded, cited, refuses off-topic) and `TrajectoryEvaluator` (looked
+it up first).
+
+| Result | Value |
+|---|---|
+| Evaluations passed | 14 of 14, overall score 0.99 |
+| In-scope answers with a verified ▶ citation | 5 of 5 |
+| Off-topic questions refused (history, and a nearby biology topic) | 2 of 2 |
+| Answers that looked the lecture up before answering | 7 of 7 |
+| Unverifiable citations removed in this run | 0 |
+
+### Problems that real runs found, and the fixes
+
+- **Reworded "quotes".** The model quoted the teacher as saying *"Chlorophyll
+  traps the energy of sunlight"*; the teacher said *"It traps…"*. It passed as a
+  near match, so the answer key now shows the transcript sentence, never the
+  model's version.
+- **The same fact asked twice.** "What three things do plants need?" and
+  "Which is NOT a requirement?" were both proven by the same sentence. The
+  duplicate check now compares evidence, not only wording.
+- **Unverifiable citations.** The chat agent once cited a range,
+  `[00:11-00:37]`. Steering now rejects any time format it cannot check.
+- **Steering messages in the chat history.** Strands stores steering guidance
+  in the conversation as a user message, so the student's history showed
+  "You cited times without reading the lecture" as if they had typed it.
+  Guidance is now tagged and filtered out.
 
 The sample is clean, synthetic speech with typed slides. Real classroom
 recordings with background noise, accents and handwriting have not been
 tested yet.
+
+## Evaluate
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe tools\evaluate.py --job output\photosynthesis
+```
+
+The built-in cases are for the sample lecture. For another lecture, pass
+`--cases cases.json` with your own questions and expected answers.
 
 ## Verified without AWS
 
 - Slide detection finds all 5 sample slides at 2, 5 and 10 second sampling.
 - The transcript parser reproduces all 15 narration sentences exactly, from
   both Transcribe formats.
-- The quiz checker gives the expected result on 10 hand-made cases (exact
-  quote, near match, invented quote, paraphrase, wrong segment, answer not an
-  option and others), and the rewrite loop recovers failed questions.
-- The full pipeline runs end to end with stand-in agents and writes both files.
+- The quiz checks give the expected result on hand-made cases: exact quote,
+  near match, invented quote, paraphrase, wrong segment, answer not an option,
+  and the same fact reworded.
+- Steering decisions were tested directly: the quiz agent is held back when
+  the quiz is short, and a chat answer is rejected for an invented time, a
+  range, or citing before reading.
 - The Transcribe client was checked against stubbed AWS responses: it uploads,
   polls, downloads, and deletes the audio and the job on success and failure.
 

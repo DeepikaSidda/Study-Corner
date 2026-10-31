@@ -3,7 +3,8 @@
     listen   audio -> Amazon Transcribe -> timestamped segments
     look     frames -> slide-change detection -> board reader agent
     notes    note writer agent -> citations cleaned and coverage measured
-    quiz     quiz writer agent -> code checks + judge agent -> rewrite loop
+    quiz     quiz agent: reads the lecture with tools, submits each question
+             to check_question (code checks + judge agent), fixes failures
     render   notes.md + lecture.json
 
 The order is fixed in code. Each step's model output is checked by code
@@ -14,11 +15,11 @@ from __future__ import annotations
 
 import json
 import time
-from dataclasses import asdict
 from pathlib import Path
 
 from . import agents, media
-from .checker import clean_notes, verify_quiz
+from .checker import clean_notes
+from .quiz_agent import build_quiz
 from .render import write_outputs
 from .transcript import parse_transcribe_json, save_segments
 
@@ -87,20 +88,14 @@ def run(
     log(f"notes: {len(notes.sections)} sections, coverage {notes_stats['coverage']:.0%}")
 
     # ---------------------------------------------------------------- quiz
-    log(f"quiz: writing {questions} questions")
-    draft = agents.write_quiz(segments, notes, questions, notes_language)
-    report = verify_quiz(
-        draft,
-        segments,
-        judge=agents.judge_question if judge else None,
-        rewrite=lambda failed, keep: agents.rewrite_questions(segments, failed, keep, notes_language),
-        log=log,
+    log(f"quiz: agent building {questions} questions")
+    quiz, quiz_stats = build_quiz(segments, notes, questions, notes_language, use_judge=judge, log=log)
+    log(
+        f"quiz: {len(quiz)} verified questions from {quiz_stats['checks']} checks "
+        f"({quiz_stats['code_failures']} failed code checks, {quiz_stats['judge_failures']} failed the judge)"
     )
-    log(f"quiz: {len(report.accepted)} verified questions, {len(report.rejected)} dropped")
 
     # ---------------------------------------------------------------- render
-    quiz_stats = asdict(report)
-    quiz_stats.pop("accepted")
     metrics = {
         "lecture_seconds": lecture_seconds,
         "processing_seconds": round(time.time() - started, 1),
@@ -109,6 +104,6 @@ def run(
         "notes": notes_stats,
         "quiz": quiz_stats,
     }
-    md_path, json_path = write_outputs(out_dir, notes, report.accepted, boards, segments, metrics)
+    md_path, json_path = write_outputs(out_dir, notes, quiz, boards, segments, metrics)
     log(f"done in {metrics['processing_seconds']:.0f}s -> {md_path}")
     return {"notes_md": md_path, "lecture_json": json_path, "metrics": metrics}

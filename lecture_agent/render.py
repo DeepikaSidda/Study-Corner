@@ -101,14 +101,14 @@ def render_markdown(
         ("Transcript segments", n["segments_total"]),
         ("Segments covered by the notes", f"{n['segments_cited']} ({n['coverage']:.0%})"),
         ("Board frames sampled → kept after change detection", f"{metrics['frames_sampled']} → {metrics['frames_kept']}"),
-        ("Quiz questions generated (incl. rewrites)", q["generated"]),
-        ("Passed checks on the first try", q["first_pass_ok"]),
-        ("Rewrite rounds", q["rewrite_rounds"]),
-        ("Failed code check (quote not in lecture, bad options)", q["code_failures"]),
-        ("Failed judge check", q["judge_failures"]),
-        ("Near-match quotes replaced with the teacher's exact words", q.get("quotes_replaced_with_transcript", 0)),
-        ("Questions in this quiz, all verified", len(quiz)),
-        ("Questions dropped", len(q["rejected"])),
+        ("Questions submitted to check_question by the quiz agent", q["checks"]),
+        ("Failed the code check (quote not in lecture, bad options)", q["code_failures"]),
+        ("Failed the judge agent", q["judge_failures"]),
+        ("Rejected as duplicates", q["duplicates"]),
+        ("Near-match quotes replaced with the teacher's exact words", q["quotes_replaced_with_transcript"]),
+        ("Times steering stopped the agent finishing early", q["completion_nudges"]),
+        ("Tool calls", ", ".join(f"{k} {v}" for k, v in q["tool_calls"].items()) or "none"),
+        ("Questions in this quiz, all verified", f"{len(quiz)} of {q['target']}"),
     ]
     out += [f"| {label} | {value} |" for label, value in rows]
     out.append("")

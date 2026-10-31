@@ -1,25 +1,18 @@
 """Grounding checks: make sure notes and quiz come from the lecture.
 
-Two layers, cheapest first:
+Used by the quiz agent's check_question tool (quiz_agent.py), cheapest first:
   1. Code checks. The cited segments must exist, the evidence quote must
      really appear in them, and a multiple-choice answer must be one of the
      options. A model cannot argue its way past these.
-  2. An LLM judge, run only on questions that pass the code checks, decides
-     whether the cited lines actually prove the answer.
-
-Questions that fail are sent back for rewriting with the reasons. After the
-last round, anything still failing is dropped, so every question that ships
-has passed both layers.
+  2. Only then, the judge agent decides whether the cited lines prove the answer.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from typing import Callable
 
-from .schemas import JudgeVerdict, LectureNotes, QuizQuestion
+from .schemas import LectureNotes, QuizQuestion
 from .transcript import Segment
 
 MIN_QUOTE_WORDS = 4
@@ -100,19 +93,6 @@ def code_check(question: QuizQuestion, by_id: dict[int, Segment]) -> tuple[list[
     return problems, score
 
 
-@dataclass
-class QuizReport:
-    accepted: list[QuizQuestion] = field(default_factory=list)
-    rejected: list[dict] = field(default_factory=list)
-    generated: int = 0
-    first_pass_ok: int = 0
-    rewrite_rounds: int = 0
-    code_failures: int = 0
-    judge_failures: int = 0
-    duplicates: int = 0
-    quotes_replaced_with_transcript: int = 0
-
-
 def teacher_words(question: QuizQuestion, by_id: dict[int, Segment]) -> str:
     """The transcript text that best matches the model's evidence quote.
 
@@ -137,61 +117,24 @@ def teacher_words(question: QuizQuestion, by_id: dict[int, Segment]) -> str:
     return max(candidates, key=score)
 
 
-def _is_duplicate(question: QuizQuestion, accepted: list[QuizQuestion]) -> bool:
+def is_duplicate(question: QuizQuestion, accepted: list[QuizQuestion]) -> bool:
+    """Same question, or the same fact asked a different way.
+
+    Comparing wording alone is not enough: in a real run the quiz agent asked
+    "What are the three things plants need?" and later "Which is NOT a
+    requirement?", both proven by the identical quote. Two questions whose
+    evidence quotes match, or where one quote contains the other, test the
+    same fact.
+    """
     q = normalize(question.question)
-    return any(SequenceMatcher(None, q, normalize(a.question)).ratio() >= DUPLICATE_RATIO for a in accepted)
-
-
-def verify_quiz(
-    questions: list[QuizQuestion],
-    segments: list[Segment],
-    judge: Callable[[QuizQuestion, list[Segment]], JudgeVerdict] | None,
-    rewrite: Callable[[list[tuple[QuizQuestion, list[str]]], list[QuizQuestion]], list[QuizQuestion]] | None,
-    max_rounds: int = 2,
-    log=print,
-) -> QuizReport:
-    by_id = {s.id: s for s in segments}
-    report = QuizReport(generated=len(questions))
-    pending = list(questions)
-    round_no = 0
-
-    while pending:
-        failed: list[tuple[QuizQuestion, list[str]]] = []
-        for question in pending:
-            # Cheapest checks first; the judge is a model call, so it runs last.
-            problems, _score = code_check(question, by_id)
-            if problems:
-                report.code_failures += 1
-            elif _is_duplicate(question, report.accepted):
-                report.duplicates += 1
-                problems = ["duplicate of an accepted question"]
-            elif judge is not None:
-                verdict = judge(question, evidence_lines(question, by_id))
-                if not verdict.supported:
-                    report.judge_failures += 1
-                    problems = [f"judge: {verdict.reason}"]
-
-            if problems:
-                failed.append((question, problems))
-            else:
-                text = " ".join(s.text for s in evidence_lines(question, by_id))
-                if normalize(question.evidence_quote) not in normalize(text):
-                    question.evidence_quote = teacher_words(question, by_id)
-                    report.quotes_replaced_with_transcript += 1
-                report.accepted.append(question)
-                if round_no == 0:
-                    report.first_pass_ok += 1
-
-        log(f"  round {round_no}: {len(pending) - len(failed)} passed, {len(failed)} failed")
-        if not failed or rewrite is None or round_no >= max_rounds:
-            report.rejected = [{"question": q.question, "problems": p} for q, p in failed]
-            break
-        round_no += 1
-        report.rewrite_rounds = round_no
-        pending = rewrite(failed, report.accepted)
-        report.generated += len(pending)
-
-    return report
+    quote = normalize(question.evidence_quote)
+    for other in accepted:
+        if SequenceMatcher(None, q, normalize(other.question)).ratio() >= DUPLICATE_RATIO:
+            return True
+        other_quote = normalize(other.evidence_quote)
+        if quote and other_quote and (quote in other_quote or other_quote in quote):
+            return True
+    return False
 
 
 def clean_notes(notes: LectureNotes, segments: list[Segment]) -> dict:

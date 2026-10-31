@@ -1,8 +1,8 @@
-"""The four agents: board reader, note writer, quiz writer and judge.
+"""Single-task agents: board reader, note writer and judge.
 
-Each agent is a fresh Strands Agent with one narrow job and a structured
-output schema. The order they run in is plain Python in pipeline.py, not a
-model decision: the steps are known in advance, so code guarantees them.
+Each is a fresh Strands Agent with one narrow job and a structured output
+schema. The quiz writer (quiz_agent.py) and the study chat (chat.py) are
+tool-using agents; the judge here is called as a tool by the quiz writer.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from strands import Agent
 
 from . import config
 from .media import Frame
-from .schemas import BoardReading, JudgeVerdict, LectureNotes, QuizQuestion, QuizSet
+from .schemas import BoardReading, JudgeVerdict, LectureNotes, QuizQuestion
 from .transcript import Segment, fmt_time, format_for_prompt
 
 
@@ -84,58 +84,9 @@ def write_notes(segments: list[Segment], board_text: str, language: str) -> Lect
     return _ask(NOTES_PROMPT.format(language=language), prompt, LectureNotes)
 
 
-# --------------------------------------------------------------- quiz writer
-QUIZ_PROMPT = """You write quiz questions that check whether a student understood a lecture.
-
-Rules:
-- Every question must be answerable from the transcript alone. Never use
-  outside knowledge.
-- evidence_quote: copy 8 to 30 words EXACTLY from the transcript that prove
-  the answer. Copy the words; do not paraphrase or translate them.
-- segment_ids: the segment numbers the evidence quote comes from.
-- multiple_choice: exactly 4 options, one correct. `answer` must be
-  identical to one option. Wrong options must be plausible but clearly wrong
-  according to the lecture.
-- short_answer: `options` is empty and `answer` is a short phrase.
-- Spread the questions across the whole lecture. Mix recall questions with
-  questions that check understanding. Do not ask two questions about the same fact.
-- Write question, options, answer and explanation in {language}."""
-
-
-def write_quiz(segments: list[Segment], notes: LectureNotes, count: int, language: str) -> list[QuizQuestion]:
-    prompt = (
-        f"Write {count} questions: about two thirds multiple_choice, the rest short_answer.\n\n"
-        f"LECTURE TITLE: {notes.title}\n\n"
-        "TRANSCRIPT:\n"
-        f"{format_for_prompt(segments)}"
-    )
-    return _ask(QUIZ_PROMPT.format(language=language), prompt, QuizSet, temperature=0.4).questions
-
-
-def rewrite_questions(
-    segments: list[Segment],
-    failed: list[tuple[QuizQuestion, list[str]]],
-    keep: list[QuizQuestion],
-    language: str,
-) -> list[QuizQuestion]:
-    """Ask for replacements for questions that failed checking, with the reasons."""
-    problems = "\n\n".join(
-        f"REJECTED QUESTION: {q.question}\nPROBLEMS: " + "; ".join(reasons) for q, reasons in failed
-    )
-    already = "\n".join(f"- {q.question}" for q in keep) or "(none)"
-    prompt = (
-        f"These questions failed checking. Write {len(failed)} replacement questions "
-        "that follow every rule. Fix the listed problems; a replacement may cover a "
-        "different part of the lecture.\n\n"
-        f"{problems}\n\n"
-        f"DO NOT REPEAT THESE ACCEPTED QUESTIONS:\n{already}\n\n"
-        "TRANSCRIPT:\n"
-        f"{format_for_prompt(segments)}"
-    )
-    return _ask(QUIZ_PROMPT.format(language=language), prompt, QuizSet, temperature=0.4).questions
-
-
 # --------------------------------------------------------------- judge
+# The quiz writer itself is a tool-using agent in quiz_agent.py; this judge is
+# called from inside its check_question tool (an agent used as a tool).
 JUDGE_PROMPT = """You are a strict fact checker for quiz questions about a lecture.
 You get a few lines from the lecture transcript and one quiz question with its answer.
 Set supported to true only if those lines alone prove the given answer is correct,
