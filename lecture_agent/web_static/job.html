@@ -7,39 +7,59 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-job="{{JOB_ID}}">
-<header class="slim">
-  <a href="/" class="home">← Lecture Notes Agent</a>
-  <h1>{{TITLE}}</h1>
-</header>
+<nav class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v14H6a2 2 0 0 0-2 2Z"/><path d="M8 4v14"/><path d="m12 8 4 2.5-4 2.5Z" fill="currentColor"/></svg></span>
+    Lecture Notes Agent
+  </a>
+  <span class="nav-sep">/</span>
+  <span class="nav-title">{{TITLE}}</span>
+  <span class="nav-spacer"></span>
+  <a class="btn btn-sm" href="/">+ New lecture</a>
+</nav>
 
-<section id="progress-view" class="narrow card">
-  <h2 id="status-title">Working on your lecture…</h2>
-  <ol class="steps" id="steps">
-    <li data-step="listen">Listening: turning speech into text</li>
-    <li data-step="look">Looking: reading the board and slides</li>
-    <li data-step="notes">Writing the notes</li>
-    <li data-step="quiz">Writing and checking the quiz</li>
-    <li data-step="done">Done</li>
-  </ol>
-  <p class="warn" id="error" hidden></p>
-  <details open><summary>Log</summary><pre id="log"></pre></details>
-</section>
-
-<main id="result" class="split" hidden>
-  <aside class="player">
-    <div id="media"></div>
-    <p class="muted">Click any ▶ time to jump the video there.</p>
-    <div class="downloads">
-      <a href="/jobs/{{JOB_ID}}/files/notes.md">Download notes (.md)</a>
-      <a href="/jobs/{{JOB_ID}}/files/lecture.json">Download data (.json)</a>
+<!-- while the agent works -->
+<main id="progress-view" class="container progress-wrap">
+  <section class="card progress-card">
+    <div class="progress-head" id="progress-head">
+      <span class="spinner"></span>
+      <div>
+        <h2 id="status-title">Working on your lecture…</h2>
+        <p id="status-sub">This usually takes about as long as the lecture, or less. You can leave this page open.</p>
+      </div>
     </div>
-  </aside>
-
-  <section class="notes">
-    <h2 id="lecture-title"></h2>
-    <nav class="tabs" id="tabs"></nav>
-    <div id="panes"></div>
+    <ol class="stepper" id="steps">
+      <li data-step="listen"><span class="dot"></span><span><b>Listening</b><small>Turning speech into text with Amazon Transcribe</small></span></li>
+      <li data-step="look"><span class="dot"></span><span><b>Looking</b><small>Finding each slide and reading the board</small></span></li>
+      <li data-step="notes"><span class="dot"></span><span><b>Writing notes</b><small>Summary, key points, full notes and key terms</small></span></li>
+      <li data-step="quiz"><span class="dot"></span><span><b>Building the quiz</b><small id="quiz-progress">The quiz agent writes questions and checks each one</small></span></li>
+      <li data-step="done"><span class="dot"></span><span><b>Ready</b><small>Notes, quiz and chat</small></span></li>
+    </ol>
+    <p class="alert" id="error" hidden></p>
+    <details class="log"><summary>Show the agent's log</summary><pre id="log"></pre></details>
   </section>
+</main>
+
+<!-- results -->
+<main id="result" class="container wide" hidden>
+  <header class="result-head">
+    <h1 id="lecture-title"></h1>
+    <div class="meta" id="meta"></div>
+  </header>
+  <div class="layout">
+    <aside class="card player-card">
+      <div id="media"></div>
+      <div class="chapters" id="chapters"></div>
+      <div class="downloads">
+        <a class="btn btn-sm" href="/jobs/{{JOB_ID}}/files/notes.md">⬇ Notes (.md)</a>
+        <a class="btn btn-sm" href="/jobs/{{JOB_ID}}/files/lecture.json">⬇ Data (.json)</a>
+      </div>
+    </aside>
+    <section class="card notes-card">
+      <nav class="tabs" id="tabs" role="tablist"></nav>
+      <div id="panes"></div>
+    </section>
+  </div>
 </main>
 
 <script src="/static/job.js"></script>

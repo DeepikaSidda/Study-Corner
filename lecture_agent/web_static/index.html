@@ -7,61 +7,107 @@
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-<header>
-  <h1>Lecture Notes Agent</h1>
-  <p>Upload a recorded lecture. Get notes, a summary, key points and a quiz, with every answer checked against what the teacher said.</p>
-</header>
+<nav class="nav">
+  <a class="brand" href="/">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v14H6a2 2 0 0 0-2 2Z"/><path d="M8 4v14"/><path d="m12 8 4 2.5-4 2.5Z" fill="currentColor"/></svg></span>
+    Lecture Notes Agent
+  </a>
+  <span class="nav-spacer"></span>
+  <span class="nav-note"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="m9 12 2 2 4-4"/></svg>Built with Strands Agents on AWS</span>
+</nav>
 
-<main class="narrow">
-  <form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
-    <h2>Upload a lecture</h2>
-
-    <label class="drop" id="drop">
-      <input type="file" name="video" id="file" accept="{{ACCEPT}},video/*,audio/*" required {{DISABLED}}>
-      <span id="drop-text">Choose a video or audio file, or drop it here</span>
-      <small>MP4, MOV, WEBM, MKV, MP3, WAV, M4A · up to {{MAX_MB}} MB</small>
-    </label>
-
-    <div class="row">
-      <label>Language spoken in the lecture
-        <select name="language">{{LANGUAGE_OPTIONS}}</select>
-      </label>
-      <label>Write the notes in
-        <input type="text" name="notes_language" value="English" maxlength="40">
-      </label>
-      <label>Quiz questions
-        <input type="number" name="questions" value="10" min="3" max="20">
-      </label>
+<main class="container">
+  <section class="hero">
+    <span class="eyebrow">For students who missed the class</span>
+    <h1>Turn a recorded lecture into <span>notes you can trust</span>.</h1>
+    <p class="lead">Upload the video. Get a summary, full notes, key terms, a quiz and a chat that answers only from what the teacher said, with every answer linked to the moment in the video.</p>
+    <div class="pills">
+      <span class="chip">📝 Summary &amp; full notes</span>
+      <span class="chip">✅ Quiz checked against the teacher's words</span>
+      <span class="chip">💬 Ask the lecture</span>
+      <span class="chip">▶ Jump to any moment</span>
     </div>
-
-    {{ACCOUNT}}
-    <label class="consent">
-      <input type="checkbox" name="consent" value="yes" required {{DISABLED}}>
-      I understand this uses Amazon Transcribe and Amazon Bedrock on AWS account {{ACCOUNT_ID}}, which costs money.
-    </label>
-
-    <button type="submit" id="submit" {{DISABLED}}>Make notes</button>
-    <progress id="progress" max="100" value="0" hidden></progress>
-    <p class="muted" id="progress-text"></p>
-  </form>
-
-  <section class="card">
-    <h2>Recent lectures</h2>
-    <table class="jobs">
-      <thead><tr><th>File</th><th>Status</th><th>Uploaded</th></tr></thead>
-      <tbody>{{JOBS}}</tbody>
-    </table>
   </section>
+
+  <div class="home-grid">
+    <form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+      <h2>Upload a lecture</h2>
+
+      <label class="drop" id="drop">
+        <input type="file" name="video" id="file" accept="{{ACCEPT}},video/*,audio/*" required {{DISABLED}}>
+        <span class="drop-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg></span>
+        <span class="file-empty">
+          <strong>Drop a video here, or click to choose</strong><br>
+          <span class="muted small">MP4, MOV, WEBM, MKV, MP3, WAV or M4A · up to {{MAX_MB}} MB</span>
+        </span>
+        <span class="file-chosen">
+          <strong id="file-name"></strong>
+          <span class="muted small" id="file-size"></span>
+        </span>
+      </label>
+
+      <div class="fields">
+        <label class="field">Spoken language
+          <select name="language">{{LANGUAGE_OPTIONS}}</select>
+        </label>
+        <label class="field">Write notes in
+          <input type="text" name="notes_language" value="English" maxlength="40">
+        </label>
+        <label class="field">Quiz questions
+          <input type="number" name="questions" value="10" min="3" max="20">
+        </label>
+      </div>
+
+      {{ACCOUNT}}
+      <label class="consent">
+        <input type="checkbox" name="consent" value="yes" required {{DISABLED}}>
+        <span>I understand this uses <b>Amazon Transcribe</b> and <b>Amazon Bedrock</b> on AWS account <b>{{ACCOUNT_ID}}</b>, which costs money.</span>
+      </label>
+
+      <button class="btn btn-primary btn-block" type="submit" id="submit" {{DISABLED}}>
+        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/></svg>
+        Make notes
+      </button>
+      <div class="upload-progress" id="upload-progress" hidden>
+        <div class="bar"><span id="bar"></span></div>
+        <p class="muted small" id="progress-text" style="margin-top:8px"></p>
+      </div>
+    </form>
+
+    <div class="side">
+      <section class="card">
+        <h2>How it works</h2>
+        <div class="how">
+          <div class="how-step"><span class="n"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3"/></svg></span><div><h3>Listen</h3><p>Amazon Transcribe turns the teacher's speech into text with a time on every line.</p></div></div>
+          <div class="how-step"><span class="n"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg></span><div><h3>Look</h3><p>It finds each new slide or board and reads the text and formulas on it.</p></div></div>
+          <div class="how-step"><span class="n"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span><div><h3>Write</h3><p>Strands agents write the notes and the quiz, reading the lecture through tools.</p></div></div>
+          <div class="how-step"><span class="n"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7Z"/><path d="m9 12 2 2 4-4"/></svg></span><div><h3>Check</h3><p>Code confirms every quiz answer is in the teacher's own words before it is kept.</p></div></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Your lectures</h2>
+        <div class="lectures">{{JOBS}}</div>
+      </section>
+    </div>
+  </div>
 </main>
 
+<footer class="foot">Runs on your computer. Audio is deleted from AWS after each transcription.</footer>
+
 <script>
-  // Show the chosen file name, accept drag-and-drop, and show upload progress.
   const form = document.getElementById("upload-form");
   const input = document.getElementById("file");
   const drop = document.getElementById("drop");
-  const dropText = document.getElementById("drop-text");
+
+  const sizeText = bytes => bytes > 1e9 ? `${(bytes / 1e9).toFixed(2)} GB` : `${(bytes / 1e6).toFixed(1)} MB`;
   input.addEventListener("change", () => {
-    if (input.files.length) dropText.textContent = input.files[0].name;
+    const file = input.files[0];
+    drop.classList.toggle("has-file", !!file);
+    if (file) {
+      document.getElementById("file-name").textContent = file.name;
+      document.getElementById("file-size").textContent = `${sizeText(file.size)} · click to change`;
+    }
   });
   ["dragover", "dragenter"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("over"); }));
   ["dragleave", "drop"].forEach(e => drop.addEventListener(e, () => drop.classList.remove("over")));
@@ -73,24 +119,26 @@
   form.addEventListener("submit", ev => {
     if (!form.reportValidity()) return;
     ev.preventDefault();
-    const bar = document.getElementById("progress");
+    const button = document.getElementById("submit");
+    const box = document.getElementById("upload-progress");
+    const bar = document.getElementById("bar");
     const text = document.getElementById("progress-text");
-    document.getElementById("submit").disabled = true;
-    bar.hidden = false;
+    button.disabled = true;
+    box.hidden = false;
     const xhr = new XMLHttpRequest();
     xhr.open("POST", form.action);
     xhr.upload.onprogress = e => {
-      if (e.lengthComputable) {
-        bar.value = Math.round(100 * e.loaded / e.total);
-        text.textContent = `Uploading… ${bar.value}%`;
-      }
+      if (!e.lengthComputable) return;
+      const pct = Math.round(100 * e.loaded / e.total);
+      bar.style.width = `${pct}%`;
+      text.textContent = pct < 100 ? `Uploading… ${pct}%` : "Upload complete. Starting…";
     };
     xhr.onload = () => {
       if (xhr.status === 200 && xhr.responseURL.includes("/jobs/")) { window.location = xhr.responseURL; return; }
       text.textContent = xhr.responseText || `Upload failed (${xhr.status})`;
-      document.getElementById("submit").disabled = false;
+      button.disabled = false;
     };
-    xhr.onerror = () => { text.textContent = "Upload failed. Is the server still running?"; document.getElementById("submit").disabled = false; };
+    xhr.onerror = () => { text.textContent = "Upload failed. Is the server still running?"; button.disabled = false; };
     xhr.send(new FormData(form));
   });
 </script>

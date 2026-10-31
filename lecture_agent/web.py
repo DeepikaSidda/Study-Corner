@@ -132,19 +132,23 @@ def _queued():
 
 async def index(request: Request) -> HTMLResponse:
     rows = []
-    for job in sorted(_jobs.values(), key=lambda j: j["created"], reverse=True)[:20]:
-        when = time.strftime("%d %b %H:%M", time.localtime(job["created"]))
+    icon = ('<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'
+            '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>')
+    for job in sorted(_jobs.values(), key=lambda j: j["created"], reverse=True)[:12]:
+        when = time.strftime("%d %b, %H:%M", time.localtime(job["created"]))
+        status = escape(job["status"])
         rows.append(
-            f'<tr><td><a href="/jobs/{job["id"]}">{escape(job["original_name"])}</a></td>'
-            f'<td><span class="badge {job["status"]}">{job["status"]}</span></td><td>{when}</td></tr>'
+            f'<a class="lecture" href="/jobs/{job["id"]}"><span class="ic">{icon}</span>'
+            f'<span class="name">{escape(job["original_name"])}<span class="when">{when}</span></span>'
+            f'<span class="badge {status}">{status}</span></a>'
         )
     options = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in LANGUAGES.items())
     if _account.get("error"):
-        account = f'<p class="warn">AWS credentials are not usable: {escape(_account["error"])}</p>'
+        account = f'<p class="alert">AWS credentials are not usable: {escape(_account["error"])}</p>'
         disabled = "disabled"
     else:
-        account = (f'<p class="account">Runs use AWS account <b>{escape(_account["account"])}</b> '
-                   f'in {escape(_account["region"])} with {escape(_account["model"])}.</p>')
+        account = (f'<p class="muted small">Model {escape(_account["model"])} · region '
+                   f'{escape(_account["region"])}</p>')
         disabled = ""
     return _page(
         "index.html",
@@ -154,7 +158,7 @@ async def index(request: Request) -> HTMLResponse:
         LANGUAGE_OPTIONS=options,
         ACCEPT=",".join(sorted(VIDEO_TYPES | AUDIO_TYPES)),
         MAX_MB=str(MAX_UPLOAD_MB),
-        JOBS="".join(rows) or '<tr><td colspan="3" class="muted">No lectures yet.</td></tr>',
+        JOBS="".join(rows) or '<p class="empty">No lectures yet. Upload one to get started.</p>',
     )
 
 
