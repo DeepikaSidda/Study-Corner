@@ -3,3 +3,6 @@ boto3>=1.43.0
 pydantic>=2.0
 pillow>=10.0
 imageio-ffmpeg>=0.5
+starlette>=0.40
+uvicorn>=0.30
+python-multipart>=0.0.9

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · Lecture Notes Agent</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body data-job="{{JOB_ID}}">
+<header class="slim">
+  <a href="/" class="home">← Lecture Notes Agent</a>
+  <h1>{{TITLE}}</h1>
+</header>
+
+<section id="progress-view" class="narrow card">
+  <h2 id="status-title">Working on your lecture…</h2>
+  <ol class="steps" id="steps">
+    <li data-step="listen">Listening: turning speech into text</li>
+    <li data-step="look">Looking: reading the board and slides</li>
+    <li data-step="notes">Writing the notes</li>
+    <li data-step="quiz">Writing and checking the quiz</li>
+    <li data-step="done">Done</li>
+  </ol>
+  <p class="warn" id="error" hidden></p>
+  <details open><summary>Log</summary><pre id="log"></pre></details>
+</section>
+
+<main id="result" class="split" hidden>
+  <aside class="player">
+    <div id="media"></div>
+    <p class="muted">Click any ▶ time to jump the video there.</p>
+    <div class="downloads">
+      <a href="/jobs/{{JOB_ID}}/files/notes.md">Download notes (.md)</a>
+      <a href="/jobs/{{JOB_ID}}/files/lecture.json">Download data (.json)</a>
+    </div>
+  </aside>
+
+  <section class="notes">
+    <h2 id="lecture-title"></h2>
+    <nav class="tabs" id="tabs"></nav>
+    <div id="panes"></div>
+  </section>
+</main>
+
+<script src="/static/job.js"></script>
+</body>
+</html>

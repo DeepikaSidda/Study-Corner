@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lecture Notes Agent</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+  <h1>Lecture Notes Agent</h1>
+  <p>Upload a recorded lecture. Get notes, a summary, key points and a quiz, with every answer checked against what the teacher said.</p>
+</header>
+
+<main class="narrow">
+  <form class="card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+    <h2>Upload a lecture</h2>
+
+    <label class="drop" id="drop">
+      <input type="file" name="video" id="file" accept="{{ACCEPT}},video/*,audio/*" required {{DISABLED}}>
+      <span id="drop-text">Choose a video or audio file, or drop it here</span>
+      <small>MP4, MOV, WEBM, MKV, MP3, WAV, M4A · up to {{MAX_MB}} MB</small>
+    </label>
+
+    <div class="row">
+      <label>Language spoken in the lecture
+        <select name="language">{{LANGUAGE_OPTIONS}}</select>
+      </label>
+      <label>Write the notes in
+        <input type="text" name="notes_language" value="English" maxlength="40">
+      </label>
+      <label>Quiz questions
+        <input type="number" name="questions" value="10" min="3" max="20">
+      </label>
+    </div>
+
+    {{ACCOUNT}}
+    <label class="consent">
+      <input type="checkbox" name="consent" value="yes" required {{DISABLED}}>
+      I understand this uses Amazon Transcribe and Amazon Bedrock on AWS account {{ACCOUNT_ID}}, which costs money.
+    </label>
+
+    <button type="submit" id="submit" {{DISABLED}}>Make notes</button>
+    <progress id="progress" max="100" value="0" hidden></progress>
+    <p class="muted" id="progress-text"></p>
+  </form>
+
+  <section class="card">
+    <h2>Recent lectures</h2>
+    <table class="jobs">
+      <thead><tr><th>File</th><th>Status</th><th>Uploaded</th></tr></thead>
+      <tbody>{{JOBS}}</tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+  // Show the chosen file name, accept drag-and-drop, and show upload progress.
+  const form = document.getElementById("upload-form");
+  const input = document.getElementById("file");
+  const drop = document.getElementById("drop");
+  const dropText = document.getElementById("drop-text");
+  input.addEventListener("change", () => {
+    if (input.files.length) dropText.textContent = input.files[0].name;
+  });
+  ["dragover", "dragenter"].forEach(e => drop.addEventListener(e, ev => { ev.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach(e => drop.addEventListener(e, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", ev => {
+    ev.preventDefault();
+    if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; input.dispatchEvent(new Event("change")); }
+  });
+
+  form.addEventListener("submit", ev => {
+    if (!form.reportValidity()) return;
+    ev.preventDefault();
+    const bar = document.getElementById("progress");
+    const text = document.getElementById("progress-text");
+    document.getElementById("submit").disabled = true;
+    bar.hidden = false;
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", form.action);
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        bar.value = Math.round(100 * e.loaded / e.total);
+        text.textContent = `Uploading… ${bar.value}%`;
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200 && xhr.responseURL.includes("/jobs/")) { window.location = xhr.responseURL; return; }
+      text.textContent = xhr.responseText || `Upload failed (${xhr.status})`;
+      document.getElementById("submit").disabled = false;
+    };
+    xhr.onerror = () => { text.textContent = "Upload failed. Is the server still running?"; document.getElementById("submit").disabled = false; };
+    xhr.send(new FormData(form));
+  });
+</script>
+</body>
+</html>

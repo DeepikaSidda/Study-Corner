@@ -91,7 +91,31 @@ prints the account it found and **asks before making any paid call**.
 | `LECTURE_MAX_TOKENS` | `8000` | output limit per model call |
 | `LECTURE_S3_BUCKET` | `lecture-notes-agent-<account>-<region>` | where audio is uploaded for Transcribe; created if missing |
 
-## Usage
+## Web app: upload a recorded lecture
+
+```powershell
+$env:LECTURE_AWS_PROFILE = "my-profile"
+.\.venv\Scripts\python.exe -m lecture_agent.web
+```
+
+Open <http://127.0.0.1:8000>, choose or drag in a video or audio file (MP4,
+MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), pick the spoken language, tick
+the box confirming the run may spend on the AWS account shown, and press
+**Make notes**.
+
+The job page shows each step while it runs. When it finishes, the video sits
+next to the notes in tabs: Summary and key points, Full notes, Key terms,
+Board (each slide image with its text), an interactive Quiz, and a Quality
+report. Every ▶ time jumps the video to that moment, and a wrong quiz answer
+offers "Rewatch from 00:40". Notes download as `.md` or `.json`.
+
+Jobs run one at a time so uploads queue instead of multiplying the spend.
+Each job is kept in `output/web/<job id>/` and stays listed after a restart.
+
+The server listens on 127.0.0.1 only and has no login. Don't expose it to the
+internet as it is: anyone who can reach it could run jobs on your AWS account.
+
+## Command line
 
 ```powershell
 .\.venv\Scripts\python.exe -m lecture_agent lecture.mp4 --questions 10
