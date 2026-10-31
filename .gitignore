@@ -1,0 +1,26 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+
+# Secrets - never commit these
+.env
+*.pem
+credentials
+.aws/
+
+# Lecture media and generated output (can be large or private)
+data/videos/
+data/audio/
+data/sample/
+output/
+
+# AgentCore scaffolding (node_modules, CDK output)
+**/cdk.out/
+**/node_modules/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
