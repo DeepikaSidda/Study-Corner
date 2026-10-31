@@ -143,17 +143,17 @@ async def index(request: Request) -> HTMLResponse:
             f'<span class="badge {status}">{status}</span></a>'
         )
     options = "".join(f'<option value="{k}">{escape(v)}</option>' for k, v in LANGUAGES.items())
+    # Only shown when something is wrong; the account and model are printed
+    # in the terminal when the server starts.
     if _account.get("error"):
         account = f'<p class="alert">AWS credentials are not usable: {escape(_account["error"])}</p>'
         disabled = "disabled"
     else:
-        account = (f'<p class="muted small">Model {escape(_account["model"])} · region '
-                   f'{escape(_account["region"])}</p>')
+        account = ""
         disabled = ""
     return _page(
         "index.html",
         ACCOUNT=account,
-        ACCOUNT_ID=escape(_account.get("account", "")),
         DISABLED=disabled,
         LANGUAGE_OPTIONS=options,
         ACCEPT=",".join(sorted(VIDEO_TYPES | AUDIO_TYPES)),
@@ -173,8 +173,6 @@ async def upload(request: Request) -> Response:
     upload_file = form.get("video")
     if upload_file is None or not getattr(upload_file, "filename", ""):
         return HTMLResponse("Choose a video or audio file.", status_code=400)
-    if form.get("consent") != "yes":
-        return HTMLResponse("Tick the box to confirm the run may make paid AWS calls.", status_code=400)
 
     original = Path(upload_file.filename).name
     suffix = Path(original).suffix.lower()

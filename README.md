@@ -129,9 +129,9 @@ $env:LECTURE_AWS_PROFILE = "my-profile"
 ```
 
 Open <http://127.0.0.1:8000>, choose or drag in a video or audio file (MP4,
-MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), pick the spoken language, tick
-the box confirming the run may spend on the AWS account shown, and press
-**Make notes**.
+MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), pick the spoken language, and
+press **Make notes**. Each upload makes paid Transcribe and Bedrock calls on
+the AWS account the server prints when it starts.
 
 The job page shows each step while it runs. When it finishes, the video sits
 next to the notes in tabs: Summary and key points, Full notes, Key terms,
