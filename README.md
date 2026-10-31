@@ -91,7 +91,8 @@ when; deterministic code decides what they are allowed to keep.
 - Quiz, then an answer key with the teacher's own words and "rewatch from 03:14"
 - A quality report: coverage, checks passed, questions rewritten or dropped
 
-`output/<lecture>/lecture.json` contains the same data for other tools.
+`output/<lecture>/lecture.json` contains the same data for other tools. In the
+web app, use **Show notes** or **Download PDF** instead (see below).
 
 ## Setup
 
@@ -137,7 +138,13 @@ The job page shows each step while it runs. When it finishes, the video sits
 next to the notes in tabs: Summary and key points, Full notes, Key terms,
 Board (each slide image with its text), an interactive Quiz, **Ask**, and a
 Quality report. Every ▶ time jumps the video to that moment, and a wrong quiz
-answer offers "Rewatch from 00:40". Notes download as `.md` or `.json`.
+answer offers "Rewatch from 00:40".
+
+Under the video, **Show notes** opens the whole set of notes and the quiz as one
+readable page, with buttons to copy all the text or print it, and **Download
+PDF** gives the same content as a PDF: notes first, then the quiz on its own
+page, then the answer key. The PDF is built the first time it is asked for and
+reused after that.
 
 **Ask** is a chat that answers only from this lecture: "where does carbon
 dioxide get in?" → "through tiny holes called stomata ▶ 00:18". It shows which

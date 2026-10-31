@@ -376,3 +376,38 @@ table.details td:last-child { text-align: right; font-weight: 600; white-space: 
   .section ul { padding-left: 20px; }
   .msg { max-width: 100%; }
 }
+
+/* ------------------------------------------------------------------ notes document */
+.doc-toolbar { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; padding: 18px 16px 0; }
+.doc {
+  width: min(820px, 100% - 32px); margin: 18px auto 48px; padding: clamp(24px, 5vw, 56px);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+  font-size: 1.02rem; line-height: 1.7;
+}
+.doc h1 { font-size: clamp(1.6rem, 3.2vw, 2.2rem); margin-bottom: 6px; }
+.doc h2 { font-size: 1.25rem; color: var(--primary); margin: 32px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+.doc h3 { font-size: 1.04rem; margin: 18px 0 6px; }
+.doc ul, .doc ol { padding-left: 24px; margin: 0 0 10px; }
+.doc li { margin: 4px 0; }
+.doc dt { font-weight: 700; margin-top: 12px; }
+.doc dd { margin: 2px 0 0; color: var(--ink-2); }
+.doc .doc-meta { color: var(--muted); font-size: .9rem; }
+.doc .doc-summary { margin: 18px 0 8px; padding: 16px 20px; border-radius: 12px; background: var(--primary-soft); }
+.doc .doc-summary b { font-size: .78rem; letter-spacing: .06em; text-transform: uppercase; color: var(--primary); }
+.doc .doc-summary p { margin: 4px 0 0; }
+.doc .t { font: 600 .78rem ui-monospace, Consolas, monospace; color: var(--primary); background: var(--primary-soft); padding: 1px 7px; border-radius: 99px; white-space: nowrap; }
+.doc .quote { color: var(--muted); font-size: .92rem; }
+.doc .board-text { padding: 10px 14px; border-left: 3px solid var(--line); }
+.doc .blank { color: var(--muted); }
+.doc code { font: .9rem ui-monospace, Consolas, monospace; }
+
+@media print {
+  :root { color-scheme: light; --bg: #fff; --surface: #fff; --ink: #000; --ink-2: #222; --muted: #555; --line: #ccc;
+          --primary: #0f766e; --primary-soft: #eef7f5; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .doc { width: auto; margin: 0; padding: 0; border: 0; box-shadow: none; font-size: 11pt; }
+  .doc .page-break { break-before: page; }
+  .doc h2, .doc h3 { break-after: avoid; }
+  .doc li, .doc dd { break-inside: avoid; }
+}

@@ -135,3 +135,77 @@ def write_outputs(
     }
     json_path.write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding="utf-8")
     return md_path, json_path
+
+
+def render_document_html(data: dict) -> str:
+    """The notes as one readable HTML document, for the "Show notes" page.
+
+    Built on the server with every model-written string escaped, so it works
+    without JavaScript and prints cleanly.
+    """
+    from html import escape as e
+
+    notes = data["notes"]
+    starts = {s["id"]: s["start"] for s in data["segments"]}
+
+    def at(ids) -> str:
+        found = [starts[i] for i in ids or [] if i in starts]
+        return f' <span class="t">{fmt_time(min(found))}</span>' if found else ""
+
+    out = [f'<h1>{e(notes["title"])}</h1>']
+    meta = []
+    if data.get("metrics", {}).get("lecture_seconds"):
+        meta.append(f"Lecture length {fmt_time(data['metrics']['lecture_seconds'])}")
+    meta += [f"{len(notes['sections'])} sections", f"{len(data['quiz'])} quiz questions"]
+    out.append(f'<p class="doc-meta">{" · ".join(meta)} · times show where to rewatch</p>')
+
+    out.append(f'<div class="doc-summary"><b>In short</b><p>{e(notes["summary"])}</p></div>')
+
+    out.append("<h2>Key points</h2><ol>")
+    out += [f"<li>{e(k['point'])}{at(k['segment_ids'])}</li>" for k in notes["key_points"]]
+    out.append("</ol>")
+
+    out.append("<h2>Full notes</h2>")
+    for n, section in enumerate(notes["sections"], start=1):
+        out.append(f"<h3>{n}. {e(section['title'])}{at(section['segment_ids'])}</h3><ul>")
+        out += [f"<li>{e(b)}</li>" for b in section["bullets"]]
+        out.append("</ul>")
+
+    if notes.get("key_terms"):
+        out.append("<h2>Key terms</h2><dl>")
+        for term in notes["key_terms"]:
+            out.append(f"<dt>{e(term['term'])}{at(term['segment_ids'])}</dt><dd>{e(term['definition'])}</dd>")
+        out.append("</dl>")
+
+    if notes.get("worked_examples"):
+        out.append("<h2>Worked examples</h2>")
+        for ex in notes["worked_examples"]:
+            out.append(f"<h3>{e(ex['title'])}{at(ex['segment_ids'])}</h3><ol>")
+            out += [f"<li>{e(step)}</li>" for step in ex["steps"]]
+            out.append("</ol>")
+
+    boards = [b for b in data.get("board", []) if b.get("has_content")]
+    if boards:
+        out.append("<h2>On the board</h2>")
+        for b in boards:
+            lines = "<br>".join(e(line.strip()) for line in b["text"].splitlines() if line.strip())
+            extra = "".join(f"<br><code>{e(f)}</code>" for f in b.get("formulas", []) if f.strip() not in b["text"])
+            diagram = f'<br><i>Diagram: {e(b["diagram"])}</i>' if b.get("diagram") else ""
+            out.append(f'<p class="board-text"><span class="t">{fmt_time(b["time"])}</span><br>{lines}{extra}{diagram}</p>')
+
+    if data["quiz"]:
+        out.append('<h2 class="page-break">Quiz</h2>')
+        for n, q in enumerate(data["quiz"], start=1):
+            out.append(f"<h3>{n}. {e(q['question'])}</h3>")
+            if q["kind"] == "multiple_choice":
+                out.append('<ol type="A">' + "".join(f"<li>{e(o)}</li>" for o in q["options"]) + "</ol>")
+            else:
+                out.append('<p class="blank">Answer: ________________________</p>')
+        out.append("<h2>Answer key</h2><ol>")
+        for q in data["quiz"]:
+            out.append(
+                f"<li><b>{e(_answer_label(QuizQuestion(**q)))}</b> — {e(q['explanation'])}"
+                f'<br><span class="quote">The teacher said: “{e(q["evidence_quote"])}”</span>{at(q["segment_ids"])}</li>'
+            )
+        out.append("</ol>")
+    return "\n".join(out)

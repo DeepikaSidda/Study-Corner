@@ -250,9 +250,35 @@ async def job_file(request: Request) -> Response:
     folder = _job_dir(job["id"])
     if name == "media":
         return FileResponse(folder / job["file"])  # supports Range, so the player can seek
-    if name in ("notes.md", "lecture.json") and (folder / name).exists():
-        return FileResponse(folder / name, filename=f"{Path(job['original_name']).stem}-{name}")
+    if name == "lecture.json" and (folder / name).exists():
+        return FileResponse(folder / name)  # read by the page itself
+    if name == "notes.pdf" and job["status"] == "done":
+        pdf_path = await run_in_threadpool(_notes_pdf, folder)
+        filename = f"{Path(job['original_name']).stem}-notes.pdf"
+        return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
     return Response(status_code=404)
+
+
+def _notes_pdf(folder: Path) -> Path:
+    """Build the PDF on first request; rebuild only if lecture.json changed."""
+    from .pdf import build_pdf
+
+    source, target = folder / "lecture.json", folder / "notes.pdf"
+    if not target.exists() or target.stat().st_mtime < source.stat().st_mtime:
+        build_pdf(json.loads(source.read_text(encoding="utf-8")), target)
+    return target
+
+
+async def notes_page(request: Request) -> Response:
+    """The full notes as one readable page, with Copy, Print and PDF buttons."""
+    from .render import render_document_html
+
+    job = _get_job(request)
+    if job is None or job["status"] != "done":
+        return HTMLResponse("Not found", status_code=404)
+    data = json.loads((_job_dir(job["id"]) / "lecture.json").read_text(encoding="utf-8"))
+    return _page("notes.html", JOB_ID=job["id"], TITLE=escape(data["notes"]["title"]),
+                 DOC=render_document_html(data))
 
 
 async def frame(request: Request) -> Response:
@@ -322,6 +348,7 @@ routes = [
     Route("/", index),
     Route("/upload", upload, methods=["POST"]),
     Route("/jobs/{job_id}", job_page),
+    Route("/jobs/{job_id}/notes", notes_page),
     Route("/api/jobs/{job_id}", job_api),
     Route("/api/jobs/{job_id}/chat", chat_api, methods=["GET", "POST"]),
     Route("/jobs/{job_id}/files/{name}", job_file),

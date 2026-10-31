@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}} · Notes</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="doc-page">
+<nav class="nav no-print">
+  <a class="brand" href="/">
+    <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v14H6a2 2 0 0 0-2 2Z"/><path d="M8 4v14"/><path d="m12 8 4 2.5-4 2.5Z" fill="currentColor"/></svg></span>
+    Lecture Notes Agent
+  </a>
+  <span class="nav-spacer"></span>
+  <a class="btn btn-sm" href="/jobs/{{JOB_ID}}">← Back to the lecture</a>
+</nav>
+
+<div class="doc-toolbar no-print">
+  <button class="btn btn-sm" id="copy" type="button">Copy all text</button>
+  <button class="btn btn-sm" type="button" onclick="window.print()">Print</button>
+  <a class="btn btn-sm btn-primary" href="/jobs/{{JOB_ID}}/files/notes.pdf">⬇ Download PDF</a>
+</div>
+
+<article class="doc" id="doc">
+{{DOC}}
+</article>
+
+<script>
+  document.getElementById("copy").addEventListener("click", async ev => {
+    const button = ev.currentTarget;
+    try {
+      await navigator.clipboard.writeText(document.getElementById("doc").innerText);
+      button.textContent = "Copied ✓";
+    } catch {
+      button.textContent = "Select the text and copy it";
+    }
+    setTimeout(() => (button.textContent = "Copy all text"), 2500);
+  });
+</script>
+</body>
+</html>
