@@ -49,7 +49,7 @@ class NotesPDF(FPDF):
         self.set_margins(18, 18, 18)
         self.set_auto_page_break(True, margin=18)
         self.set_title(title)
-        self.set_creator("Lecture Notes Agent")
+        self.set_creator("Study Corner")
         self.family = self._load_fonts()
 
     def _load_fonts(self) -> str:
@@ -78,7 +78,7 @@ class NotesPDF(FPDF):
         self.set_y(-12)
         self.set_font(self.family, "", 8)
         self.set_text_color(*MUTED)
-        self.cell(0, 6, self.text_safe(f"{self.doc_title}  ·  page {self.page_no()}"), align="C")
+        self.cell(0, 6, self.text_safe(f"{self.doc_title}  ·  Study Corner  ·  page {self.page_no()}"), align="C")
 
     # -------------------------------------------------------------- blocks
     def heading(self, label: str) -> None:

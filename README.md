@@ -1,6 +1,8 @@
-# Lecture Notes Agent
+# Study Corner
 
-Turns a recorded lecture into **full notes, a summary, key points, key terms
+**Watch less. Learn more.**
+
+Study Corner turns a recorded lecture into **full notes, a summary, key points, key terms
 and a quiz**, for students who missed the class. Every quiz answer is checked
 against the teacher's actual words, and every note links to the minute of the
 video where it was said.

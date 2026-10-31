@@ -234,7 +234,7 @@ async function showResult(job) {
     return starts.length ? Math.min(...starts) : null;
   };
 
-  document.title = `${notes.title} · Lecture Notes Agent`;
+  document.title = `${notes.title} · Study Corner`;
   document.getElementById("nav-title").textContent = notes.title;
   document.getElementById("lecture-title").textContent = notes.title;
   document.getElementById("meta").append(

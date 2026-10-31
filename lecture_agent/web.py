@@ -424,7 +424,7 @@ def main() -> None:
 
     import uvicorn
 
-    parser = argparse.ArgumentParser(description="Lecture Notes Agent web app")
+    parser = argparse.ArgumentParser(description="Study Corner web app")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     args = parser.parse_args()
