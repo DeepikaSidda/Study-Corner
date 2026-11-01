@@ -247,9 +247,41 @@ it up first).
   "You cited times without reading the lecture" as if they had typed it.
   Guidance is now tagged and filtered out.
 
-The sample is clean, synthetic speech with typed slides. Real classroom
-recordings with background noise, accents and handwriting have not been
-tested yet.
+The sample is clean, synthetic speech with typed slides. For a real recording,
+see the next section.
+
+## Demo lecture: a real Python lesson
+
+The demo uses a real recorded lesson, not a generated one:
+[“Exception Handling in Python with try-except”](https://commons.wikimedia.org/wiki/File:Exception_Handling_in_Python_with_try-except.webm)
+by Adam Gaweda (NC State University, course CSC111), licensed
+[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). It is 5 minutes 7
+seconds: slides, then live coding in the Spyder editor, with the teacher on a
+webcam in the corner. The video is not stored in this repository; download it
+from the link above and upload it in the web app.
+
+Real run with Amazon Transcribe and Amazon Nova Pro:
+
+| Check | Result |
+|---|---|
+| Transcribe | 22 segments of natural, unscripted speech ("uh", "gonna", restarts) |
+| Board reading | 31 frames sampled, 19 kept after change detection, all 19 read, including the code and the `ZeroDivisionError` tracebacks |
+| Notes | 7 sections, 10 key points, 91% of the transcript cited |
+| Quiz agent, 8 questions | 7 verified from 13 checks: 1 failed the code check and was fixed, 5 repeats of a saved fact rejected; the agent then stopped with 7 because the lesson holds few separate facts |
+| Chat | "What does the except block do?" answered with ▶ 03:00 and ▶ 04:36; "What is the capital of France?" refused, pointing to the start of the lesson |
+| Time | transcription 51 s; then 194 s to read the screen, write the notes and build the quiz, for the 307 s lesson |
+
+Problems this real lesson found, and the fixes:
+
+- **A broken model reply stopped the whole job.** Nova once streamed an
+  invalid tool-use reply while reading a frame (`modelStreamErrorException`).
+  The single-task agents now retry such passing errors twice, and if one frame
+  still can't be read it is skipped and logged instead of failing the lecture.
+- **A dangling sentence after removing a citation.** The chat answered
+  "…which starts at [00:01]." with a time it had not looked up. Removing the
+  time left "…which starts at." The words leading up to a removed time now go
+  with it. The cleaned answer is also saved to the chat history, so reopening
+  the chat never shows the unchecked time.
 
 ## Evaluate
 

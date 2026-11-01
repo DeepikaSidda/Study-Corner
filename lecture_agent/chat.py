@@ -50,6 +50,15 @@ Rules:
 - list_sections shows the outline; read_board shows what was written on the board."""
 
 
+# Optional words just before a cited time that only make sense with the time:
+# ", which starts at", " from", " at around". Removed together with the time.
+LEAD_IN = (
+    r"(?:,?\s+(?:(?:which|that)\s+)?"
+    r"(?:(?:starts?|begins?|is|are|was|comes?|appears?|happens?|explained|covered|discussed)\s+)?"
+    r"(?:at\s+around|at|from|around|near)(?=\s*\[))?"
+)
+
+
 def _parse_time(label: str) -> float:
     parts = [int(p) for p in label.split(":")]
     seconds = 0
@@ -68,16 +77,18 @@ def _build(job_dir: Path, student_id: str, language: str):
     index = LectureIndex.from_lecture_json(job_dir / "lecture.json")
     trace = TraceHook()
     citations = CitationCheck(index, max_revisions=2)
+    session = FileSessionManager(session_id=f"chat-{student_id}", storage_dir=str(job_dir / "chat"))
     agent = Agent(
         model=config.model(temperature=0.2),
         system_prompt=CHAT_PROMPT.format(language=language),
         tools=lecture_tools(index),
         hooks=[BudgetHook(default_tool_limit=6, max_model_calls=12), trace],
         plugins=[citations],
-        session_manager=FileSessionManager(session_id=f"chat-{student_id}", storage_dir=str(job_dir / "chat")),
+        session_manager=session,
         conversation_manager=SlidingWindowConversationManager(window_size=30),
         callback_handler=None,
     )
+    agent.lecture_session = session  # used by ask() to save the cleaned answer
     return agent, index, trace, citations
 
 
@@ -102,14 +113,25 @@ def ask(job_dir: Path, student_id: str, question: str, language: str = "English"
         return ""
 
     def drop_unverifiable(match: re.Match) -> str:
-        bracket = match.group(0).strip()
+        bracket = match.group("bracket")
         if CITED_TIME.fullmatch(bracket):
             return match.group(0)  # a single time; already checked above
         removed.append(bracket)
         return ""
 
-    answer = re.sub(r"\s*" + CITED_TIME.pattern, keep_or_drop, answer)
-    answer = re.sub(r"\s*" + ANY_TIME_BRACKET.pattern, drop_unverifiable, answer).strip()
+    # When a time is removed, the words that led up to it go too, so
+    # "..., which starts at [00:01]." becomes "..." and not "..., which starts at."
+    answer = re.sub(LEAD_IN + r"\s*" + CITED_TIME.pattern, keep_or_drop, answer)
+    answer = re.sub(LEAD_IN + r"\s*(?P<bracket>" + ANY_TIME_BRACKET.pattern + ")", drop_unverifiable, answer).strip()
+
+    # Save the cleaned answer over the raw one, so a reloaded chat (history)
+    # and the model's next turn never see a citation the student wasn't shown.
+    history_cleaned = False
+    session = getattr(agent, "lecture_session", None)
+    if removed and session is not None:
+        cleaned = {"role": "assistant", "content": [{"text": answer}]}
+        session.redact_latest_message(cleaned, agent)
+        history_cleaned = True
 
     seen, cited = set(), []
     for label in CITED_TIME.findall(answer):
@@ -120,6 +142,7 @@ def ask(job_dir: Path, student_id: str, question: str, language: str = "English"
         "answer": answer,
         "citations": cited,
         "unverified_citations_removed": removed,
+        "history_cleaned": history_cleaned,
         "tools": trace.calls,
         "steering_corrections": citations.problems,
         "stop_reason": result.stop_reason,

@@ -275,7 +275,7 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .preview-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); }
 .preview-body { display: grid; grid-template-columns: 1.1fr 1fr; gap: 14px; }
 @media (max-width: 760px) { .preview-body { grid-template-columns: 1fr; } }
-.pv-video { aspect-ratio: 16/9; border-radius: 14px; background: linear-gradient(135deg, #12372f, #1d4d42); position: relative; overflow: hidden; display: grid; align-content: start; padding: 18px 20px; color: #e6fff8; }
+.pv-video { aspect-ratio: 16/9; border-radius: 14px; background: linear-gradient(135deg, #161b2e, #24304a); position: relative; overflow: hidden; display: grid; align-content: start; padding: 18px 20px; color: #e6fff8; }
 .pv-video b { font: 700 1.15rem var(--font-display); letter-spacing: -.01em; }
 .pv-video span { opacity: .8; font-size: .82rem; }
 .pv-play { position: absolute; left: 50%; top: 55%; transform: translate(-50%, -50%); width: 54px; height: 54px; border-radius: 50%; background: rgba(255,255,255,.18); backdrop-filter: blur(6px); display: grid; place-items: center; }

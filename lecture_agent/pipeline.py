@@ -21,7 +21,7 @@ from . import agents, media
 from .checker import clean_notes
 from .quiz_agent import build_quiz
 from .render import write_outputs
-from .transcript import parse_transcribe_json, save_segments
+from .transcript import fmt_time, parse_transcribe_json, save_segments
 
 
 def run(
@@ -76,7 +76,12 @@ def run(
         sampled, kept = len(frames), len(changed)
         log(f"look: {sampled} frames sampled, {kept} kept after change detection")
         for frame in changed:
-            boards.append((frame, agents.read_board(frame)))
+            # One unreadable frame should not lose the whole lecture: skip it
+            # (the transcript still covers what was said) and say so.
+            try:
+                boards.append((frame, agents.read_board(frame)))
+            except Exception as exc:  # noqa: BLE001
+                log(f"  look: skipped the frame at {fmt_time(frame.time)} ({type(exc).__name__}: {str(exc)[:80]})")
         log(f"look: {sum(1 for _, r in boards if r.has_content)} frames had board content")
     else:
         log("look: skipped")

@@ -7,6 +7,8 @@ tool-using agents; the judge here is called as a tool by the quiz writer.
 
 from __future__ import annotations
 
+import time
+
 from strands import Agent
 
 from . import config
@@ -15,9 +17,30 @@ from .schemas import BoardReading, JudgeVerdict, LectureNotes, QuizQuestion
 from .transcript import Segment, fmt_time, format_for_prompt
 
 
+# Bedrock errors that go away when the same request is sent again, e.g. Nova
+# now and then streaming a broken tool-use reply ("Model produced invalid
+# sequence as part of ToolUse").
+TRANSIENT_ERRORS = ("modelStreamErrorException", "invalid sequence", "ThrottlingException",
+                    "ServiceUnavailable", "InternalServerException", "ModelThrottled")
+RETRIES = 2
+
+
+def is_transient(exc: Exception) -> bool:
+    text = f"{type(exc).__name__}: {exc}"
+    return any(marker in text for marker in TRANSIENT_ERRORS)
+
+
 def _ask(system_prompt: str, prompt, schema, temperature: float = 0.2):
-    agent = Agent(model=config.model(temperature), system_prompt=system_prompt, callback_handler=None)
-    result = agent(prompt, structured_output_model=schema)
+    for attempt in range(RETRIES + 1):
+        # A fresh agent each try, so a broken reply never stays in the history.
+        agent = Agent(model=config.model(temperature), system_prompt=system_prompt, callback_handler=None)
+        try:
+            result = agent(prompt, structured_output_model=schema)
+            break
+        except Exception as exc:  # noqa: BLE001 - re-raised unless it is a known transient error
+            if attempt == RETRIES or not is_transient(exc):
+                raise
+            time.sleep(2 * (attempt + 1))
     output = result.structured_output
     if output is None:
         raise RuntimeError(f"{schema.__name__}: the model returned no structured output")
