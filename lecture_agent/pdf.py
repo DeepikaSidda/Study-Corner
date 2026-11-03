@@ -150,6 +150,8 @@ def build_pdf(data: dict, out_path: Path) -> Path:
              time.strftime("Made %d %b %Y")]
     pdf.para("  ·  ".join(meta), size=9.5, color=MUTED)
     pdf.para("Times in brackets show where to rewatch in the video.", size=9.5, color=MUTED)
+    if data.get("credit"):
+        pdf.para(data["credit"], size=9.5, color=MUTED)
     pdf.ln(4)
 
     pdf.box("In short", notes["summary"])

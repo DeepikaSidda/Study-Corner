@@ -158,6 +158,8 @@ def render_document_html(data: dict) -> str:
         meta.append(f"Lecture length {fmt_time(data['metrics']['lecture_seconds'])}")
     meta += [f"{len(notes['sections'])} sections", f"{len(data['quiz'])} quiz questions"]
     out.append(f'<p class="doc-meta">{" · ".join(meta)} · times show where to rewatch</p>')
+    if data.get("credit"):
+        out.append(f'<p class="doc-meta">{e(data["credit"])}</p>')
 
     out.append(f'<div class="doc-summary" id="summary"><b>In short</b><p>{e(notes["summary"])}</p></div>')
 

@@ -29,29 +29,37 @@ def fmt_time(seconds: float) -> str:
     return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes:02d}:{secs:02d}"
 
 
-def parse_transcribe_json(data: dict, max_segment_seconds: float = 30.0) -> list[Segment]:
+def parse_transcribe_json(data: dict, max_segment_seconds: float = 15.0) -> list[Segment]:
     """Turn an Amazon Transcribe result into numbered, timestamped segments.
 
-    Prefers `audio_segments` (sentence-level, present in current Transcribe
-    output). Falls back to rebuilding sentences from word-level `items`.
+    Built from the word-level `items` when present, so lines are short enough
+    for every chapter and key point to get its own time. Transcribe's own
+    `audio_segments` are often 20+ seconds for unscripted speech (a real
+    4-minute lesson came back as 13 lines), which gave two chapters the same
+    start time. `audio_segments` is only used when there are no word items.
     """
     results = data.get("results", data)
     raw = results.get("audio_segments") or []
+    items = results.get("items") or []
     segments: list[Segment] = []
 
-    if raw:
+    if items:
+        segments = _segments_from_items(items, max_segment_seconds)
+    elif raw:
         for seg in raw:
             text = (seg.get("transcript") or "").strip()
             if text:
                 segments.append(
                     Segment(0, float(seg["start_time"]), float(seg["end_time"]), text)
                 )
-    else:
-        segments = _segments_from_items(results.get("items") or [], max_segment_seconds)
 
     for number, seg in enumerate(segments, start=1):
         seg.id = number
     return segments
+
+
+CLAUSE_END = {",", ";", ":"}
+SOFT_SECONDS = 7.0  # after this long, a comma also ends the line
 
 
 def _segments_from_items(items: list[dict], max_seconds: float) -> list[Segment]:
@@ -75,7 +83,8 @@ def _segments_from_items(items: list[dict], max_seconds: float) -> list[Segment]
         else:  # punctuation attaches to the previous word
             if words:
                 words[-1] += content
-            if content in SENTENCE_END and words:
+            long_enough = start is not None and end is not None and end - start >= SOFT_SECONDS
+            if words and (content in SENTENCE_END or (content in CLAUSE_END and long_enough)):
                 segments.append(Segment(0, start, end, " ".join(words)))
                 words, start = [], None
 

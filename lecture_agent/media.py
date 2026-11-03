@@ -109,7 +109,13 @@ def frame_difference(a: Image.Image, b: Image.Image, pixel_threshold: int = 32) 
     return changed.histogram()[255] / float(a.width * a.height)
 
 
-def slide_changes(frames: list[Frame], threshold: float = 0.02, max_frames: int = 24) -> list[Frame]:
+def slide_changes(
+    frames: list[Frame],
+    threshold: float = 0.02,
+    max_frames: int = 24,
+    small_change: float = 0.002,
+    max_gap_seconds: float = 30.0,
+) -> list[Frame]:
     """Keep only frames where the board or slide visibly changed.
 
     `threshold` is the share of pixels that must change (default 2%). Each
@@ -118,12 +124,23 @@ def slide_changes(frames: list[Frame], threshold: float = 0.02, max_frames: int 
     enough has changed. A teacher walking in front of the board also counts as
     change; `max_frames` caps the cost by thinning frames evenly so the whole
     lecture stays represented.
+
+    Screen recordings of code change very little: typing a line in an editor
+    changed under 1% of pixels in a real lesson, so only 3 of 24 frames passed
+    the 2% bar. A smaller change (`small_change`) also counts once
+    `max_gap_seconds` have passed since the last kept frame. A frame identical
+    to the last one is still never kept.
     """
     kept: list[Frame] = []
     last = None
     for frame in frames:
         thumb = _thumbnail(frame.path)
-        if last is None or frame_difference(thumb, last) >= threshold:
+        if last is None:
+            keep = True
+        else:
+            change = frame_difference(thumb, last)
+            keep = change >= threshold or (change >= small_change and frame.time - kept[-1].time >= max_gap_seconds)
+        if keep:
             kept.append(frame)
             last = thumb
     if len(kept) > max_frames:

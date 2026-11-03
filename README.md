@@ -166,6 +166,52 @@ one on another device. Every question is a paid model call.
 Jobs run one at a time so uploads queue instead of multiplying the spend.
 Each job is kept in `output/web/<job id>/` and stays listed after a restart.
 
+### From a YouTube link
+
+The **YouTube link** tab takes a video address instead of a file. As you
+paste, Study Corner looks the video up with the YouTube Data API and shows its
+title, channel, length and licence. Only videos the creator published under
+YouTube's **Creative Commons (CC BY)** licence are accepted, because that
+licence lets anyone reuse the video. Standard-licence videos are refused with
+the reason, and you can upload your own copy instead if you have the right
+to. The licence is checked again from the video page just before download.
+Live streams, videos over 120 minutes, and videos whose creator set a spoken
+language other than English are refused too.
+
+The video is downloaded at up to 720p with [yt-dlp](https://github.com/yt-dlp/yt-dlp),
+then goes through the same steps as an upload. Every output (the lecture
+page, Show notes and the PDF) credits the title, the channel, a link and the
+licence. Pasting a link that was already made opens the existing notes, so
+nothing is charged twice.
+
+It needs a YouTube Data API v3 key in a `.env` file in the project folder
+(git-ignored):
+
+```
+YOUTUBE_API_KEY=your-key
+```
+
+Each lookup uses 1 unit of the free 10,000-unit daily quota. The key is sent
+in a request header, never in a URL, and is not shown in the page. Node.js
+(or Deno) must be installed: yt-dlp needs a JavaScript runtime for YouTube.
+
+Tested on ["Learn Python: Identifiers and Keywords (Lesson 2)"](https://www.youtube.com/watch?v=3tp32DBXE1g)
+by Indently (CC BY, 4 min 4 s): 7.4 MB downloaded in about 12 s, then 37
+transcript lines, 7 screens of code read, 4 chapters, 10 key points, 100% of
+the lesson cited, and 8 of 8 quiz questions verified.
+
+This lesson found two more problems, now fixed:
+
+- **Two chapters at 00:00.** Amazon Transcribe's sentence list came back as
+  13 lines for 4 minutes of unscripted speech, some 25 s long, so two chapters
+  and two key points shared one start time. Lines are now built from the
+  word timings, ending at a sentence end, or at a comma after 7 seconds, and
+  never longer than 15 seconds (37 lines for the same lesson).
+- **Typed code wasn't "a new slide".** Typing in an editor changes under 1% of
+  the screen, so only 3 of 24 frames passed the 2% change bar, and the Board
+  tab showed 2 readings. A small change now also counts once 30 seconds have
+  passed since the last kept frame: 9 frames kept, 7 with code.
+
 The server listens on 127.0.0.1 only and has no login. Don't expose it to the
 internet as it is: anyone who can reach it could run jobs on your AWS account.
 

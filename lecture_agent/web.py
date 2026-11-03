@@ -29,7 +29,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import chat, config, pipeline
+from . import chat, config, pipeline, youtube
 
 WEB_DIR = Path(os.environ.get("LECTURE_WEB_DIR", "output/web")).resolve()
 STATIC = Path(__file__).parent / "web_static"
@@ -93,6 +93,13 @@ def _worker() -> None:
         job = _jobs[job_id]
         _update(job_id, status="running", started=time.time())
         try:
+            source = job.get("source") or {}
+            if source.get("type") == "youtube" and not job.get("file"):
+                _log(job_id, "download: from YouTube")
+                video = youtube.VideoInfo(**source["video"])
+                path = youtube.download(video, _job_dir(job_id), log=lambda m, j=job_id: _log(j, m))
+                _update(job_id, file=path.name)
+                _log(job_id, f"download: saved {path.name} ({path.stat().st_size / 1e6:.1f} MB)")
             opts = job["options"]
             pipeline.run(
                 _job_dir(job_id) / job["file"],
@@ -120,7 +127,8 @@ def _page(name: str, **values: str) -> HTMLResponse:
 
 
 def _public(job: dict) -> dict:
-    keys = ("id", "original_name", "status", "error", "created", "started", "finished", "options", "kind", "log")
+    keys = ("id", "original_name", "status", "error", "created", "started", "finished", "options", "kind", "log",
+            "source")
     out = {k: job.get(k) for k in keys}
     out["queue_position"] = list(_queued()).index(job["id"]) + 1 if job["status"] == "queued" else None
     return out
@@ -150,7 +158,8 @@ def _summary(job: dict) -> dict:
     except (OSError, json.JSONDecodeError):
         return {}
     boards = data.get("board") or []
-    frame = boards[0]["frame"] if boards else None
+    with_content = [b for b in boards if b.get("has_content")]
+    frame = (with_content or boards)[0]["frame"] if boards else None
     if frame is None:
         frames = sorted((_job_dir(job["id"]) / "frames").glob("f_*.jpg"))
         frame = frames[0].name if frames else None
@@ -171,8 +180,11 @@ def _lecture_card(job: dict) -> str:
     status = escape(job["status"])
     when = time.strftime("%d %b, %H:%M", time.localtime(job["created"]))
     title = escape(info.get("title") or job["original_name"])
+    video = (job.get("source") or {}).get("video") or {}
     if info.get("frame"):
         thumb = f'<img src="/jobs/{job["id"]}/frames/{info["frame"]}" alt="" loading="lazy">'
+    elif youtube.VIDEO_ID.match(video.get("id", "")):
+        thumb = f'<img src="https://i.ytimg.com/vi/{video["id"]}/mqdefault.jpg" alt="" loading="lazy">'
     else:
         thumb = ('<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">'
                  '<rect x="3" y="5" width="14" height="14" rx="2"/><path d="m17 10 4-2v8l-4-2"/></svg>')
@@ -180,8 +192,12 @@ def _lecture_card(job: dict) -> str:
     parts = [when]
     if info.get("questions"):
         parts.append(f"{info['questions']} questions")
-    if info.get("title"):
+    if video:
+        parts.append("YouTube · " + escape(video.get("channel", "")))
+    elif info.get("title"):
         parts.append(escape(job["original_name"]))
+    if not info.get("seconds") and video.get("seconds"):
+        duration = f'<span class="dur">{fmt_time(video["seconds"])}</span>'
     return (
         f'<a class="lecture-card" href="/jobs/{job["id"]}">'
         f'<span class="thumb">{thumb}<span class="badge {status}">{status}</span>{duration}</span>'
@@ -200,10 +216,15 @@ async def index(request: Request) -> HTMLResponse:
     else:
         account = ""
         disabled = ""
+    yt_on = youtube.enabled()
     return _page(
         "index.html",
         ACCOUNT=account,
         DISABLED=disabled,
+        YT_DISABLED="" if yt_on else "disabled",
+        YT_NOTE="" if yt_on else "YouTube links are switched off. Add YOUTUBE_API_KEY to the .env file to turn them on.",
+        YT_BUTTON_OFF="true" if disabled else "false",
+        YT_MAX_MIN=str(youtube.MAX_MINUTES),
         ACCEPT=",".join(sorted(VIDEO_TYPES | AUDIO_TYPES)),
         MAX_MB=str(MAX_UPLOAD_MB),
         JOBS="".join(rows) or (
@@ -274,6 +295,79 @@ async def upload(request: Request) -> Response:
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
+def _existing_youtube_job(video_id: str) -> dict | None:
+    """A job already made (or being made) from this video, so it isn't paid for twice."""
+    for job in sorted(_jobs.values(), key=lambda j: j["created"], reverse=True):
+        if ((job.get("source") or {}).get("video") or {}).get("id") == video_id and \
+                job["status"] in ("queued", "running", "done"):
+            return job
+    return None
+
+
+async def youtube_check(request: Request) -> Response:
+    """Look a link up before starting: title, length, licence and any reason it can't be used."""
+    if not youtube.enabled():
+        return JSONResponse({"error": "YouTube links are switched off: add YOUTUBE_API_KEY to the .env file."},
+                            status_code=503)
+    try:
+        info, problems = await run_in_threadpool(youtube.check, request.query_params.get("url", ""))
+    except youtube.YouTubeError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
+    existing = _existing_youtube_job(info.id)
+    return JSONResponse({
+        "video": info.to_dict(),
+        "problems": problems,
+        "existing_job": existing["id"] if existing else None,
+        "max_minutes": youtube.MAX_MINUTES,
+    })
+
+
+async def youtube_submit(request: Request) -> Response:
+    """Start a job from a YouTube link. The download happens in the worker, in turn."""
+    if _account.get("error"):
+        return HTMLResponse("AWS credentials are not usable.", status_code=503)
+    if not youtube.enabled():
+        return HTMLResponse("YouTube links are switched off: add YOUTUBE_API_KEY to the .env file.", status_code=503)
+    form = await request.form(max_files=1, max_fields=5)
+    try:
+        questions = max(3, min(20, int(form.get("questions") or 10)))
+    except ValueError:
+        questions = 10
+    # Checked again here: never trust the earlier preview.
+    try:
+        info, problems = await run_in_threadpool(youtube.check, str(form.get("url") or ""))
+    except youtube.YouTubeError as exc:
+        return HTMLResponse(str(exc), status_code=400)
+    if problems:
+        return HTMLResponse(" ".join(problems), status_code=400)
+    existing = _existing_youtube_job(info.id)
+    if existing:
+        return RedirectResponse(f"/jobs/{existing['id']}", status_code=303)
+
+    from .transcript import fmt_time
+
+    job_id = uuid.uuid4().hex[:12]
+    _job_dir(job_id).mkdir(parents=True)
+    job = {
+        "id": job_id,
+        "original_name": info.title,
+        "file": None,  # set by the worker after the download
+        "kind": "video",
+        "source": {"type": "youtube", "video": info.to_dict()},
+        "status": "queued",
+        "created": time.time(),
+        "options": {"language": LECTURE_LANGUAGE, "notes_language": NOTES_LANGUAGE, "questions": questions},
+        "log": [f"{time.strftime('%H:%M:%S')}  YouTube link: {info.title} by {info.channel} "
+                f"({fmt_time(info.seconds)}, Creative Commons)"],
+        "error": None,
+    }
+    with _lock:
+        _jobs[job_id] = job
+        _save(job)
+    _queue.put(job_id)
+    return RedirectResponse(f"/jobs/{job_id}", status_code=303)
+
+
 def _get_job(request: Request) -> dict | None:
     job_id = request.path_params["job_id"]
     return _jobs.get(job_id) if JOB_ID.match(job_id) else None
@@ -301,23 +395,44 @@ async def job_file(request: Request) -> Response:
     name = request.path_params["name"]
     folder = _job_dir(job["id"])
     if name == "media":
+        if not job.get("file") or not (folder / job["file"]).exists():
+            return Response(status_code=404)  # a YouTube job before its download
         return FileResponse(folder / job["file"])  # supports Range, so the player can seek
     if name == "lecture.json" and (folder / name).exists():
         return FileResponse(folder / name)  # read by the page itself
     if name == "notes.pdf" and job["status"] == "done":
-        pdf_path = await run_in_threadpool(_notes_pdf, folder)
-        filename = f"{Path(job['original_name']).stem}-notes.pdf"
+        pdf_path = await run_in_threadpool(_notes_pdf, job)
+        stem = job["original_name"] if job.get("source") else Path(job["original_name"]).stem
+        stem = re.sub(r"[^\w\- ]+", "", stem).strip()[:80] or "lecture"
+        filename = f"{stem}-notes.pdf"
         return FileResponse(pdf_path, media_type="application/pdf", filename=filename)
     return Response(status_code=404)
 
 
-def _notes_pdf(folder: Path) -> Path:
+def _credit(job: dict) -> str:
+    """Attribution line for a YouTube video (CC BY asks for title, creator, link and licence)."""
+    video = (job.get("source") or {}).get("video")
+    if not video:
+        return ""
+    return (f'From YouTube: "{video["title"]}" by {video["channel"]}, {video["url"]}, '
+            "licensed CC BY (https://creativecommons.org/licenses/by/3.0/). Notes made by Study Corner.")
+
+
+def _lecture_data(job: dict) -> dict:
+    data = json.loads((_job_dir(job["id"]) / "lecture.json").read_text(encoding="utf-8"))
+    if _credit(job):
+        data["credit"] = _credit(job)
+    return data
+
+
+def _notes_pdf(job: dict) -> Path:
     """Build the PDF on first request; rebuild only if lecture.json changed."""
     from .pdf import build_pdf
 
+    folder = _job_dir(job["id"])
     source, target = folder / "lecture.json", folder / "notes.pdf"
     if not target.exists() or target.stat().st_mtime < source.stat().st_mtime:
-        build_pdf(json.loads(source.read_text(encoding="utf-8")), target)
+        build_pdf(_lecture_data(job), target)
     return target
 
 
@@ -328,7 +443,7 @@ async def notes_page(request: Request) -> Response:
     job = _get_job(request)
     if job is None or job["status"] != "done":
         return HTMLResponse("Not found", status_code=404)
-    data = json.loads((_job_dir(job["id"]) / "lecture.json").read_text(encoding="utf-8"))
+    data = _lecture_data(job)
     return _page("notes.html", JOB_ID=job["id"], TITLE=escape(data["notes"]["title"]),
                  DOC=render_document_html(data))
 
@@ -399,6 +514,8 @@ async def static(request: Request) -> Response:
 routes = [
     Route("/", index),
     Route("/upload", upload, methods=["POST"]),
+    Route("/youtube", youtube_submit, methods=["POST"]),
+    Route("/api/youtube", youtube_check),
     Route("/jobs/{job_id}", job_page),
     Route("/jobs/{job_id}/notes", notes_page),
     Route("/api/jobs/{job_id}", job_api),

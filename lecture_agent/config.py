@@ -14,12 +14,35 @@ Settings (environment variables):
                           output, no Marketplace subscription needed)
     LECTURE_MAX_TOKENS    default 8000
     LECTURE_S3_BUCKET     bucket for Transcribe uploads (optional)
+    YOUTUBE_API_KEY       YouTube Data API v3 key; enables "Paste a YouTube link"
+
+Settings can also go in a `.env` file in the project folder (git-ignored).
+Real environment variables win over `.env`.
 """
 
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
+ENV_FILE = Path(__file__).resolve().parents[1] / ".env"
+
+
+def _load_env_file(path: Path = ENV_FILE) -> None:
+    """Read KEY=value lines from .env without overriding the real environment."""
+    if not path.is_file():
+        return
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_env_file()
+
+YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY") or None
 REGION = os.environ.get("LECTURE_AWS_REGION", "us-east-1")
 PROFILE = os.environ.get("LECTURE_AWS_PROFILE") or None
 MODEL_ID = os.environ.get("LECTURE_MODEL_ID", "us.amazon.nova-pro-v1:0")

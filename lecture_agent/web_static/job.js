@@ -48,6 +48,8 @@ const ICONS = {
   arrow: '<path d="m9 6 6 6-6 6"/>',
   upload: '<path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/>',
   cloud: '<path d="M7 18a5 5 0 1 1 1-9.9A6 6 0 0 1 19.5 11 3.5 3.5 0 0 1 18 18Z"/>',
+  download: '<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>',
+  youtube: '<rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z" fill="currentColor"/>',
 };
 
 function icon(name, cls = "icon") {
@@ -81,8 +83,10 @@ function jump(seconds, label) {
 const isTyping = target => target && (target.closest("input, textarea, select, [contenteditable]"));
 
 // ================================================================== progress
-const STEPS = ["listen", "look", "notes", "quiz", "done"];
-const STEP_ICON = { listen: "listen", look: "look", notes: "notes", quiz: "quiz", done: "spark" };
+const UPLOAD_STEPS = ["listen", "look", "notes", "quiz", "done"];
+let STEPS = UPLOAD_STEPS;
+const STEP_ICON = { download: "download", listen: "listen", look: "look", notes: "notes", quiz: "quiz", done: "spark" };
+const isYouTube = job => (job.source || {}).type === "youtube";
 let elapsedTimer = null;
 
 function parseLog(lines) {
@@ -108,6 +112,12 @@ function humanize(text) {
   const t = text.trim();
   let m;
   if ((m = t.match(/^uploaded (.+) \(([\d.]+ MB)\)/))) return ["upload", `Uploaded ${m[1]} (${m[2]})`];
+  if ((m = t.match(/^YouTube link: (.+) by (.*) \(/))) return ["youtube", `YouTube video: ${m[1]} by ${m[2]}`];
+  if (t.startsWith("download: from YouTube")) return ["download", "Downloading the video from YouTube"];
+  if ((m = t.match(/^download: (video|audio) (\d+)% of (\d+) MB/))) return ["download", `Downloading the ${m[1]}: ${m[2]}% of ${m[3]} MB`];
+  if ((m = t.match(/^download: (video|audio) finished/))) return ["check", `The ${m[1]} is downloaded`, "ok"];
+  if ((m = t.match(/^download: saved .+\(([\d.]+ MB)\)/))) return ["check", `Video ready (${m[1]})`, "ok"];
+  if (t.includes("look: skipped the frame")) return ["info", "One slide couldn't be read and was skipped"];
   if ((m = t.match(/^lecture: .+\((\d+)s\)/))) return ["clock", `The lecture is ${fmt(Number(m[1]))} long`];
   if (t.startsWith("listen: Amazon Transcribe")) return ["listen", "Sending the audio to Amazon Transcribe"];
   if (t.startsWith("uploading audio")) return ["cloud", "Uploading the audio to a private S3 bucket"];
@@ -129,15 +139,18 @@ function humanize(text) {
 }
 
 function renderProgress(job) {
+  STEPS = isYouTube(job) ? ["download", ...UPLOAD_STEPS] : UPLOAD_STEPS;
+  document.querySelector('#steps li[data-step="download"]').hidden = !isYouTube(job);
   const entries = parseLog(job.log);
   const starts = stepStarts(entries);
-  let current = "listen";
+  let current = STEPS[0];
   for (const name of STEPS) if (starts[name]) current = name;
   const now = STEPS.indexOf(current);
   const lastTime = entries.length ? entries[entries.length - 1].time : null;
 
   document.querySelectorAll("#steps li").forEach(li => {
     const name = li.dataset.step, i = STEPS.indexOf(name);
+    if (i < 0) return;  // the download step on an upload
     li.className = i < now || (name === "done" && starts.done) ? "done" : i === now ? "active" : "";
     li.querySelector(".dot").replaceChildren(icon(li.className === "done" ? "check" : STEP_ICON[name]));
     const next = STEPS[i + 1];
@@ -208,7 +221,9 @@ async function poll() {
     document.getElementById("progress-head").classList.add("failed");
     document.getElementById("live").style.cssText = "background:var(--bad);animation:none";
     title.textContent = "Something went wrong";
-    sub.textContent = "Nothing more will be charged for this upload. You can upload it again.";
+    sub.textContent = isYouTube(job)
+      ? "Nothing more will be charged for this video. You can paste the link again."
+      : "Nothing more will be charged for this upload. You can upload it again.";
     const stuck = document.querySelector("#steps li.active");
     if (stuck) { stuck.className = "failed"; stuck.querySelector(".dot").replaceChildren(icon("x")); }
     const err = document.getElementById("error");
@@ -244,9 +259,22 @@ async function showResult(job) {
     el("span", { class: "chip" }, icon("shield"), `${Math.round(100 * m.notes.coverage)}% of the lecture covered`),
   );
 
+  // ---- credit the creator of a YouTube video (the CC BY licence asks for it)
+  if (isYouTube(job)) {
+    const v = job.source.video;
+    const ext = { target: "_blank", rel: "noopener noreferrer" };
+    const safe = url => (/^https:\/\/www\.youtube\.com\//.test(url || "") ? url : null);
+    document.getElementById("meta").after(el("p", { class: "credit" }, icon("youtube"),
+      "From YouTube: ", el("a", { href: safe(v.url), ...ext }, v.title),
+      " by ", v.channel_url ? el("a", { href: safe(v.channel_url), ...ext }, v.channel) : v.channel,
+      " · ", el("a", { href: "https://creativecommons.org/licenses/by/3.0/", ...ext }, "CC BY"),
+      ". Notes made by Study Corner."));
+  }
+
   // ---- player, timeline and chapters
   const attrs = { controls: true, preload: "metadata", src: `${base}/files/media`, playsinline: true };
-  if (job.kind !== "audio" && data.board.length) attrs.poster = `${base}/frames/${data.board[0].frame}`;
+  const cover = data.board.find(b => b.has_content) || data.board[0];
+  if (job.kind !== "audio" && cover) attrs.poster = `${base}/frames/${cover.frame}`;
   player = el(job.kind === "audio" ? "audio" : "video", attrs);
   document.getElementById("media").append(player);
 

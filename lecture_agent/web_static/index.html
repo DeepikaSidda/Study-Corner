@@ -35,7 +35,7 @@
     <div class="hero-copy">
       <span class="eyebrow"><span class="dot"></span>Study Corner</span>
       <h1>Watch less.<br><span class="grad-text">Learn more.</span></h1>
-      <p class="lead">Upload the video. In a few minutes you get a summary, full notes, key terms and a quiz, plus a chat that answers only from what the teacher actually said. Every point links to the exact moment in the video.</p>
+      <p class="lead">Upload a video or paste a YouTube link. In a few minutes you get a summary, full notes, key terms and a quiz, plus a chat that answers only from what the teacher actually said. Every point links to the exact moment in the video.</p>
       <ul class="trust">
         <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Every quiz answer is checked against the teacher's own words</li>
         <li><span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"/></svg></span>Reads the board and slides, formulas included</li>
@@ -43,12 +43,24 @@
       </ul>
     </div>
 
-    <form class="upload-card" action="/upload" method="post" enctype="multipart/form-data" id="upload-form">
+    <div class="upload-card" id="start-card">
       <div class="upload-head">
-        <h2>Upload a lecture</h2>
+        <h2>Add a lecture</h2>
         <span class="badge done">Ready</span>
       </div>
 
+      {{ACCOUNT}}
+
+      <div class="source-tabs" role="tablist" aria-label="Where the lecture comes from">
+        <button type="button" role="tab" class="on" aria-selected="true" aria-controls="upload-form" data-src="file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4"/><path d="m6 10 6-6 6 6"/><path d="M4 20h16"/></svg>Upload a video
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="yt-form" data-src="youtube">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="4"/><path d="m10 9 5 3-5 3Z" fill="currentColor"/></svg>YouTube link
+        </button>
+      </div>
+
+    <form action="/upload" method="post" enctype="multipart/form-data" id="upload-form" role="tabpanel">
       <label class="drop" id="drop">
         <input type="file" name="video" id="file" accept="{{ACCEPT}},video/*,audio/*" required {{DISABLED}}>
         <span class="drop-icon">
@@ -72,8 +84,6 @@
         <p class="field-note muted small">For lectures in English. Notes, quiz and chat are written in English.</p>
       </div>
 
-      {{ACCOUNT}}
-
       <button class="btn btn-primary btn-lg btn-block" type="submit" id="submit" {{DISABLED}}>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/></svg>
         Make my notes
@@ -84,6 +94,38 @@
       </div>
       <p class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Runs on your computer. Audio is deleted from AWS after transcription.</p>
     </form>
+
+    <form action="/youtube" method="post" id="yt-form" role="tabpanel" hidden>
+      <label class="yt-input">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>
+        <input type="url" name="url" id="yt-url" placeholder="Paste a YouTube link, e.g. https://youtu.be/…" autocomplete="off" spellcheck="false" required {{YT_DISABLED}}>
+      </label>
+      <p class="yt-status" id="yt-status" aria-live="polite">{{YT_NOTE}}</p>
+
+      <div class="yt-preview" id="yt-preview" hidden>
+        <img id="yt-thumb" alt="" referrerpolicy="no-referrer">
+        <div class="yt-text">
+          <b id="yt-title"></b>
+          <span class="muted small" id="yt-meta"></span>
+          <span class="badge" id="yt-licence"></span>
+        </div>
+      </div>
+      <div class="alert yt-problems" id="yt-problems" hidden></div>
+
+      <div class="fields">
+        <label class="field">Quiz questions
+          <input type="number" name="questions" value="10" min="3" max="20">
+        </label>
+        <p class="field-note muted small">English lectures only. Up to {{YT_MAX_MIN}} minutes.</p>
+      </div>
+
+      <button class="btn btn-primary btn-lg btn-block" type="submit" id="yt-submit" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/></svg>
+        <span id="yt-submit-text">Make my notes</span>
+      </button>
+      <p class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a3.5 3.5 0 1 0 0 5"/></svg>Creative Commons videos only. The creator is credited.</p>
+    </form>
+    </div>
   </section>
 
   <!-- ============================================================ preview -->
@@ -200,7 +242,114 @@
     ev.preventDefault();
     if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; input.dispatchEvent(new Event("change")); drop.scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
-  document.querySelector('.lectures-head a').addEventListener("click", ev => { ev.preventDefault(); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => input.click(), 450); });
+  document.querySelector('.lectures-head a').addEventListener("click", ev => { ev.preventDefault(); showSource("file"); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => input.click(), 450); });
+
+  // ---------------------------------------------------------------- source tabs
+  const tabs = [...document.querySelectorAll(".source-tabs button")];
+  const ytForm = document.getElementById("yt-form");
+  const ytUrl = document.getElementById("yt-url");
+  function showSource(src, focus = true) {
+    tabs.forEach(b => { const on = b.dataset.src === src; b.classList.toggle("on", on); b.setAttribute("aria-selected", String(on)); });
+    form.hidden = src !== "file";
+    ytForm.hidden = src !== "youtube";
+    if (src === "youtube" && focus) ytUrl.focus();
+    history.replaceState(null, "", src === "youtube" ? "#youtube" : location.pathname);
+  }
+  tabs.forEach(b => b.addEventListener("click", () => showSource(b.dataset.src)));
+  tabs.forEach((b, i) => b.addEventListener("keydown", ev => {
+    if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+    const next = tabs[(i + (ev.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+    next.focus(); showSource(next.dataset.src, false);
+  }));
+  if (location.hash === "#youtube") showSource("youtube", false);
+
+  // ---------------------------------------------------------------- YouTube link
+  const ytLink = /^(https?:\/\/)?((www|m|music)\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com)\//i;
+  const ytStatus = document.getElementById("yt-status");
+  const ytPreview = document.getElementById("yt-preview");
+  const ytProblems = document.getElementById("yt-problems");
+  const ytSubmit = document.getElementById("yt-submit");
+  const ytSubmitText = document.getElementById("yt-submit-text");
+  const clock = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`; };
+  let checkSeq = 0, checkTimer = null, existingJob = null;
+
+  function resetYt(message = "") {
+    ytPreview.hidden = true; ytProblems.hidden = true; ytProblems.replaceChildren();
+    ytSubmit.disabled = true; existingJob = null; ytSubmitText.textContent = "Make my notes";
+    ytStatus.textContent = message;
+  }
+
+  async function checkLink() {
+    const link = ytUrl.value.trim();
+    if (!link) { resetYt(); return; }
+    const seq = ++checkSeq;
+    resetYt("Checking the video…");
+    ytStatus.classList.add("busy");
+    let body, status;
+    try {
+      const res = await fetch(`/api/youtube?url=${encodeURIComponent(link)}`);
+      status = res.status; body = await res.json();
+    } catch {
+      body = { error: "Couldn't reach the server. Is it still running?" };
+    }
+    if (seq !== checkSeq) return;  // a newer link was pasted meanwhile
+    ytStatus.classList.remove("busy");
+    if (body.error) { resetYt(); ytProblems.hidden = false; ytProblems.textContent = body.error; return; }
+
+    const v = body.video;
+    document.getElementById("yt-thumb").src = v.thumbnail;
+    document.getElementById("yt-title").textContent = v.title;
+    document.getElementById("yt-meta").textContent = `${v.channel} · ${clock(v.seconds)}`;
+    const lic = document.getElementById("yt-licence");
+    const cc = v.license === "creativeCommon";
+    lic.className = `badge ${cc ? "done" : "failed"}`;
+    lic.textContent = cc ? "Creative Commons · can be used" : "Standard YouTube licence";
+    ytPreview.hidden = false;
+    ytStatus.textContent = "";
+    if (body.problems.length) {
+      ytProblems.hidden = false;
+      ytProblems.replaceChildren(...body.problems.map(p => Object.assign(document.createElement("p"), { textContent: p })));
+      return;
+    }
+    existingJob = body.existing_job;
+    ytSubmit.disabled = {{YT_BUTTON_OFF}};
+    ytSubmitText.textContent = existingJob ? "Open the notes (already made)" : "Make my notes";
+    if (existingJob) ytStatus.textContent = "Notes for this video were already made, so nothing new will be charged.";
+  }
+
+  ytUrl.addEventListener("input", () => { clearTimeout(checkTimer); checkTimer = setTimeout(checkLink, 450); });
+  ytUrl.addEventListener("paste", () => { clearTimeout(checkTimer); checkTimer = setTimeout(checkLink, 50); });
+
+  // Paste a YouTube link anywhere on the page to start.
+  document.addEventListener("paste", ev => {
+    if (ev.target.closest && ev.target.closest("input, textarea")) return;
+    const text = (ev.clipboardData && ev.clipboardData.getData("text") || "").trim();
+    if (!ytLink.test(text) || ytUrl.disabled) return;
+    ev.preventDefault();
+    showSource("youtube", false);
+    ytUrl.value = text;
+    checkLink();
+    document.getElementById("start-card").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+
+  ytForm.addEventListener("submit", async ev => {
+    ev.preventDefault();
+    if (ytSubmit.disabled) return;
+    if (existingJob) { window.location = `/jobs/${existingJob}`; return; }
+    ytSubmit.disabled = true;
+    ytSubmitText.textContent = "Starting…";
+    try {
+      const res = await fetch(ytForm.action, { method: "POST", body: new FormData(ytForm) });
+      if (res.ok && res.redirected && res.url.includes("/jobs/")) { window.location = res.url; return; }
+      ytProblems.hidden = false;
+      ytProblems.textContent = (await res.text()) || `Couldn't start (${res.status}).`;
+    } catch {
+      ytProblems.hidden = false;
+      ytProblems.textContent = "Couldn't reach the server. Is it still running?";
+    }
+    ytSubmit.disabled = false;
+    ytSubmitText.textContent = "Make my notes";
+  });
 
   form.addEventListener("submit", ev => {
     if (!form.reportValidity()) return;

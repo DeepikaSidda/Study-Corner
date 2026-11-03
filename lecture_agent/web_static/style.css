@@ -235,6 +235,32 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .upload-card::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; background: var(--grad); -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; opacity: .55; pointer-events: none; }
 .upload-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
 .upload-head h2 { margin: 0; font-size: 1.15rem; }
+.upload-card .alert { margin-bottom: 14px; }
+
+/* where the lecture comes from: file or YouTube */
+.source-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.source-tabs button { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--muted); font: 600 .9rem var(--font); cursor: pointer; transition: background .15s, color .15s; }
+.source-tabs button svg { width: 17px; height: 17px; flex: none; }
+.source-tabs button:hover:not(.on) { color: var(--ink); }
+.source-tabs button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.source-tabs button.on svg { color: var(--primary); }
+
+.yt-input { display: flex; align-items: center; gap: 10px; padding: 0 14px; margin-bottom: 8px; border-radius: 14px; border: 1.5px solid var(--line-strong); background: var(--surface); transition: border-color .15s, box-shadow .15s; }
+.yt-input:focus-within { border-color: var(--primary); box-shadow: var(--ring); }
+.yt-input svg { width: 20px; height: 20px; color: var(--muted); flex: none; }
+.yt-input input { flex: 1; min-width: 0; padding: 15px 0; border: 0; outline: none; background: transparent; color: var(--ink); font: 400 .97rem var(--font); }
+.yt-input input:disabled { cursor: not-allowed; }
+.yt-status { min-height: 1.3em; margin: 0 2px 12px; font-size: .84rem; color: var(--muted); }
+.yt-status.busy::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 8px; border-radius: 50%; border: 2px solid var(--primary); border-right-color: transparent; vertical-align: -1px; animation: spin .8s linear infinite; }
+.yt-preview { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 14px; align-items: center; padding: 10px; margin-bottom: 14px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-2); }
+.yt-preview img { width: 136px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; background: var(--surface-3); display: block; }
+.yt-text { display: grid; gap: 5px; min-width: 0; }
+.yt-text b { font-size: .95rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.yt-text .badge { justify-self: start; text-transform: none; }
+.yt-problems { display: grid; gap: 6px; }
+.yt-problems p { margin: 0; }
+@media (max-width: 480px) { .yt-preview { grid-template-columns: 104px minmax(0, 1fr); } .yt-preview img { width: 104px; } }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .drop {
   position: relative; display: grid; place-items: center; text-align: center; gap: 8px;
@@ -396,6 +422,9 @@ details.log pre { margin: 10px 0 0; padding: 14px; border-radius: 12px; backgrou
 .result-hero h1 { font-size: clamp(1.6rem, 3vw, 2.35rem); margin: 0; letter-spacing: -.035em; font-weight: 800; }
 .result-hero .rh-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .meta { display: flex; flex-wrap: wrap; gap: 8px; }
+.credit { margin: 0; font-size: .86rem; line-height: 1.6; color: var(--muted); }
+.credit svg { width: 16px; height: 16px; color: #ff3d3d; margin-right: 6px; vertical-align: -3px; }
+.credit a { color: var(--ink-2); font-weight: 600; }
 
 .layout { display: grid; grid-template-columns: minmax(320px, 38%) minmax(0, 1fr); gap: 22px; align-items: start; padding-bottom: 56px; }
 @media (max-width: 1020px) { .layout { grid-template-columns: minmax(0, 1fr); } }
