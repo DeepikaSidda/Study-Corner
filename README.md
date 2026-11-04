@@ -2,13 +2,45 @@
 
 **Watch less. Learn more.**
 
-Study Corner turns a recorded lecture into **full notes, a summary, key points, key terms
-and a quiz**, for students who missed the class. Every quiz answer is checked
-against the teacher's actual words, and every note links to the minute of the
-video where it was said.
+Study Corner turns a recorded lecture, uploaded or pasted as a YouTube link,
+into **a summary, full notes, key terms, a checked quiz and a chat that
+answers only from what the teacher said**. Every point links to the second of
+the video where it was said. Lectures in Hindi, Tamil or Telugu come out as
+English notes.
 
-Built with the [Strands Agents SDK](https://strandsagents.com) and Amazon
-Bedrock, Amazon Transcribe and Amazon S3.
+Built with the [Strands Agents SDK](https://strandsagents.com) on AWS:
+Amazon Bedrock (Nova Pro), Amazon Transcribe, Amazon Translate, Amazon
+DynamoDB and Amazon S3.
+
+### At a glance
+
+| | |
+|---|---|
+| **In** | A video or audio file, or any YouTube link |
+| **Out** | Summary and key points · full notes in chapters · key terms · what was on the board · a quiz where every answer is proven by a quote · "Ask the lecture" chat · Show notes page · PDF |
+| **Trust** | Code checks every quiz quote against the transcript before a judge agent approves it; chat answers may only cite times the tools actually returned, and may not show code that wasn't on screen |
+| **Agents** | Board reader, note writer, quiz agent (tool loop), judge (agent as a tool), chat agent: all Strands |
+| **Stored in** | Amazon DynamoDB: lectures, notes, quiz, transcript lines, board readings; searchable from the home page |
+
+### Quick start
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+$env:LECTURE_AWS_PROFILE = "my-profile"
+.\.venv\Scripts\python.exe -m lecture_agent.web       # http://127.0.0.1:8000
+```
+
+For YouTube links, put `YOUTUBE_API_KEY=...` in a `.env` file (git-ignored).
+Details are in [Setup](#setup) and [Web app](#web-app-upload-a-recorded-lecture).
+
+### Three ways in
+
+| Input | How the words are found | Board and slides |
+|---|---|---|
+| Upload a file | Amazon Transcribe (language detected; non-English translated with Amazon Translate) | read by the board reader agent |
+| YouTube link, Creative Commons | downloaded, then the same as an upload | read |
+| Any other YouTube link | never downloaded: plays in YouTube's player; notes from YouTube's captions, translated if needed, or a pasted transcript | not read |
 
 ## Who it is for
 
@@ -249,7 +281,7 @@ says in Hindi still reaches the notes through Transcribe and Translate.
 Tested on ["How to contribute to Hindi Wikipedia"](https://commons.wikimedia.org/wiki/File:How_to_contribute_to_Hindi_Wikipedia.ogv)
 (Subhashish Panigrahi and Noopur Raval, CC BY-SA 3.0, 4 min 58 s): detected
 as hi-IN, 22 lines translated, 21 of 24 screens read with no failures,
-6 chapters, 91% covered, 8 of 8 quiz questions verified, in 167 s after
+5 chapters, 91% covered, 8 of 8 quiz questions verified, in 167 s after
 transcription. An English clip still came back as en-US.
 
 ### YouTube videos that may not be downloaded
