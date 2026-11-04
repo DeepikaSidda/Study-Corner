@@ -201,16 +201,21 @@
     <div class="container">
       <div class="lectures-head">
         <h2>Your lectures</h2>
+        <label class="lecture-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="search" id="search" placeholder="Search every lecture, e.g. for loop" autocomplete="off" maxlength="80">
+        </label>
         <a class="btn btn-sm" href="#">+ Upload another</a>
       </div>
-      <div class="lecture-grid">{{JOBS}}</div>
+      <div class="search-results" id="search-results" hidden></div>
+      <div class="lecture-grid" id="lecture-grid">{{JOBS}}</div>
     </div>
   </section>
 </main>
 
 <footer class="foot">
   <div class="container">
-    <span>Study Corner · built with Strands Agents, Amazon Bedrock and Amazon Transcribe</span>
+    <span>Study Corner · built with Strands Agents, Amazon Bedrock, Amazon Transcribe, Amazon Translate and Amazon DynamoDB</span>
     <span>Demo lecture: <a href="https://commons.wikimedia.org/wiki/File:Exception_Handling_in_Python_with_try-except.webm" target="_blank" rel="noopener">“Exception Handling in Python with try-except”</a> by Adam Gaweda, <a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a></span>
   </div>
 </footer>
@@ -243,6 +248,42 @@
     if (ev.dataTransfer.files.length) { input.files = ev.dataTransfer.files; input.dispatchEvent(new Event("change")); drop.scrollIntoView({ behavior: "smooth", block: "center" }); }
   });
   document.querySelector('.lectures-head a').addEventListener("click", ev => { ev.preventDefault(); showSource("file"); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => input.click(), 450); });
+
+  // ---------------------------------------------------------------- search (Amazon DynamoDB)
+  const searchBox = document.getElementById("search");
+  const results = document.getElementById("search-results");
+  const grid = document.getElementById("lecture-grid");
+  let searchTimer = null, searchSeq = 0;
+  const mmss = s => { s = Math.round(s || 0); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+  const node = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text !== undefined) n.textContent = text; return n; };
+  async function runSearch() {
+    const q = searchBox.value.trim();
+    if (q.length < 2) { results.hidden = true; grid.hidden = false; return; }
+    const seq = ++searchSeq;
+    let body;
+    try { body = await (await fetch(`/api/search?q=${encodeURIComponent(q)}`)).json(); }
+    catch { body = { error: "Couldn't reach the server." }; }
+    if (seq !== searchSeq) return;
+    results.replaceChildren();
+    grid.hidden = true; results.hidden = false;
+    if (body.error) { results.append(node("p", "muted", body.error)); return; }
+    if (!body.results.length) { results.append(node("p", "muted", `No lecture mentions "${q}".`)); return; }
+    results.append(node("p", "muted small", `${body.results.length} lecture${body.results.length > 1 ? "s" : ""} mention "${q}"`));
+    for (const r of body.results) {
+      const card = node("div", "search-hit");
+      const title = node("a", "sh-title", r.lecture.title);
+      title.href = `/jobs/${r.lecture.id}`;
+      card.append(title, node("span", "muted small", `${r.matches} match${r.matches === 1 ? "" : "es"}${r.lecture.channel ? " · " + r.lecture.channel : ""}`));
+      for (const f of r.first) {
+        const line = node("a", "sh-line");
+        line.href = `/jobs/${r.lecture.id}?t=${Math.floor(f.start || 0)}#summary`;
+        line.append(node("code", "", f.kind === "board" ? "board" : `▶ ${mmss(f.start)}`), node("span", "", f.text));
+        card.append(line);
+      }
+      results.append(card);
+    }
+  }
+  searchBox.addEventListener("input", () => { clearTimeout(searchTimer); searchTimer = setTimeout(runSearch, 300); });
 
   // ---------------------------------------------------------------- source tabs
   const tabs = [...document.querySelectorAll(".source-tabs button")];

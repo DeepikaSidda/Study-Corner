@@ -354,6 +354,12 @@ async function showResult(job) {
     player = el(job.kind === "audio" ? "audio" : "video", attrs);
     document.getElementById("media").append(player);
   }
+  // Opened from a search result: start the video at that moment.
+  const startAt = Number(new URLSearchParams(location.search).get("t"));
+  if (startAt > 0) {
+    if (player instanceof HTMLMediaElement) player.addEventListener("loadedmetadata", () => { player.currentTime = startAt; }, { once: true });
+    else player.currentTime = startAt;
+  }
 
   const chapters = notes.sections
     .map((s, i) => ({ n: i + 1, title: s.title, start: at(s.segment_ids) }))

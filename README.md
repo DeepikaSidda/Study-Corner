@@ -200,6 +200,36 @@ by Indently (CC BY, 4 min 4 s): 7.4 MB downloaded in about 12 s, then 37
 transcript lines, 7 screens of code read, 4 chapters, 10 key points, 100% of
 the lesson cited, and 8 of 8 quiz questions verified.
 
+### Database: Amazon DynamoDB
+
+Every lecture is stored in one DynamoDB table (`study-corner-lectures`,
+on-demand billing, created on first start). Each lecture is one partition:
+
+| Item (`sk`) | Holds |
+|---|---|
+| `META` | title, source (upload or YouTube), video link, channel, licence, length, transcript source, status, counts, folder |
+| `NOTES` | summary, key points, sections, key terms, worked examples, quality metrics |
+| `QUIZ#001`… | one item per quiz question: options, answer, explanation, the teacher's quote |
+| `LINE#00001`… | one item per transcript line with its start and end time |
+| `BOARD#00001`… | one item per board or slide reading |
+
+An `INDEX` partition lists every lecture newest first with one Query. A
+finished lecture is written by the worker; lectures made before the table
+existed are copied in when the server starts. The lecture page, Show notes
+and the PDF read from DynamoDB, with the local `lecture.json` as a fallback,
+and a database problem never fails a lecture. Videos, frame pictures and
+PDFs stay in the lecture folder (the table stores its path).
+
+**Search** on the home page finds every lecture that mentions a word in its
+transcript, board or title, and links to the moment it was said
+(`/jobs/<id>?t=<seconds>`). It uses a filtered Scan, which is fine for a
+class's lectures; a large library would move it to OpenSearch.
+
+Settings: `LECTURE_DDB_TABLE` (table name), `LECTURE_DDB=off` (run without
+DynamoDB). The AWS user needs `dynamodb:CreateTable`, `DescribeTable`,
+`Query`, `Scan`, `PutItem`, `UpdateItem`, `DeleteItem` and
+`BatchWriteItem` on that table.
+
 ### Uploads in Hindi, Tamil or Telugu
 
 Uploads no longer have to be in English. Amazon Transcribe identifies the

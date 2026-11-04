@@ -29,7 +29,7 @@ from starlette.requests import Request
 from starlette.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 
-from . import chat, config, pipeline, youtube
+from . import chat, config, db, pipeline, youtube
 
 WEB_DIR = Path(os.environ.get("LECTURE_WEB_DIR", "output/web")).resolve()
 STATIC = Path(__file__).parent / "web_static"
@@ -161,7 +161,35 @@ def _worker() -> None:
             _log(job_id, f"ERROR: {exc}")
             _update(job_id, status="failed", finished=time.time(), error=str(exc)[:500])
         finally:
+            _store(job_id)
             _queue.task_done()
+
+
+def _store(job_id: str) -> None:
+    """Save the finished (or failed) lecture to DynamoDB. Never fails the job."""
+    job = _jobs[job_id]
+    lecture = _job_dir(job_id) / "lecture.json"
+    data = None
+    if job["status"] == "done" and lecture.exists():
+        data = json.loads(lecture.read_text(encoding="utf-8"))
+    written = db.safe(db.save_lecture, job, data, log=lambda m: _log(job_id, m))
+    if written:
+        _log(job_id, f"database: saved to Amazon DynamoDB ({written} items)")
+
+
+def _backfill() -> None:
+    """Copy lectures made before DynamoDB was added (or while it was unreachable)."""
+    stored = db.safe(lambda: {m["id"] for m in db.list_lectures(500)}, log=print)
+    if stored is None:
+        return
+    for job in sorted(_jobs.values(), key=lambda j: j["created"]):
+        if job["id"] in stored or job["status"] not in ("done", "failed"):
+            continue
+        lecture = _job_dir(job["id"]) / "lecture.json"
+        data = json.loads(lecture.read_text(encoding="utf-8")) if lecture.exists() and job["status"] == "done" else None
+        written = db.safe(db.save_lecture, job, data, log=print)
+        if written:
+            print(f"database: copied {job['id']} ({written} items)")
 
 
 # --------------------------------------------------------------------- pages
@@ -444,6 +472,21 @@ async def youtube_submit(request: Request) -> Response:
     return RedirectResponse(f"/jobs/{job_id}", status_code=303)
 
 
+async def search_api(request: Request) -> Response:
+    """Find lectures that mention a word, from Amazon DynamoDB."""
+    query = (request.query_params.get("q") or "").strip()[:80]
+    if len(query) < 2:
+        return JSONResponse({"results": []})
+    if not db.ENABLED:
+        return JSONResponse({"error": "Search needs the database (LECTURE_DDB is off)."}, status_code=503)
+    results = await run_in_threadpool(db.safe, db.search, query)
+    if results is None:
+        return JSONResponse({"error": "The database couldn't be reached. Try again."}, status_code=503)
+    for r in results:  # only lectures this server knows about, with only the fields the page needs
+        r["lecture"] = {k: r["lecture"].get(k) for k in ("id", "title", "channel", "seconds", "source_type", "youtube_id")}
+    return JSONResponse({"results": [r for r in results if r["lecture"]["id"] in _jobs]})
+
+
 def _get_job(request: Request) -> dict | None:
     job_id = request.path_params["job_id"]
     return _jobs.get(job_id) if JOB_ID.match(job_id) else None
@@ -474,6 +517,10 @@ async def job_file(request: Request) -> Response:
         if not job.get("file") or not (folder / job["file"]).exists():
             return Response(status_code=404)  # a YouTube job before its download
         return FileResponse(folder / job["file"])  # supports Range, so the player can seek
+    if name == "lecture.json" and job["status"] == "done":
+        stored = await run_in_threadpool(db.safe, db.get_lecture, job["id"])
+        if stored:  # read from Amazon DynamoDB; the file is the fallback
+            return JSONResponse(stored, headers={"X-Study-Corner-Source": "dynamodb"})
     if name == "lecture.json" and (folder / name).exists():
         return FileResponse(folder / name)  # read by the page itself
     if name == "notes.pdf" and job["status"] == "done":
@@ -500,7 +547,8 @@ def _credit(job: dict) -> str:
 
 
 def _lecture_data(job: dict) -> dict:
-    data = json.loads((_job_dir(job["id"]) / "lecture.json").read_text(encoding="utf-8"))
+    data = db.safe(db.get_lecture, job["id"]) or json.loads(
+        (_job_dir(job["id"]) / "lecture.json").read_text(encoding="utf-8"))
     if _credit(job):
         data["credit"] = _credit(job)
     return data
@@ -597,6 +645,7 @@ routes = [
     Route("/upload", upload, methods=["POST"]),
     Route("/youtube", youtube_submit, methods=["POST"]),
     Route("/api/youtube", youtube_check),
+    Route("/api/search", search_api),
     Route("/jobs/{job_id}", job_page),
     Route("/jobs/{job_id}/notes", notes_page),
     Route("/api/jobs/{job_id}", job_api),
@@ -614,6 +663,8 @@ def create_app() -> Starlette:
         _account["error"] = str(exc)
     _load_jobs()
     threading.Thread(target=_worker, daemon=True, name="lecture-worker").start()
+    if db.ENABLED and not _account.get("error"):
+        threading.Thread(target=_backfill, daemon=True, name="db-backfill").start()
     return Starlette(routes=routes)
 
 
