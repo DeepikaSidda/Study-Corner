@@ -188,23 +188,28 @@ class Captions:
     translated: bool
     method: str  # "youtube" or "pasted"
     segments: list  # list[Segment]
+    needs_translation: bool = False  # not English: Amazon Translate turns it into English in the worker
 
     @property
     def words(self) -> int:
         return sum(len(s.text.split()) for s in self.segments)
 
     def describe(self) -> str:
+        by_aws = ", translated to English with Amazon Translate"
         if self.method == "pasted":
-            return "the pasted transcript"
+            return "the pasted transcript" + (by_aws if self.needs_translation else "")
         kind = "auto-generated" if self.generated else "made by the creator"
         if self.translated:
             kind = "auto-translated to English by YouTube"
+        if self.needs_translation:
+            name = self.language_name.replace(" (auto-generated)", "")
+            return f"YouTube's {name} captions ({kind}){by_aws}"
         return f"YouTube's English captions ({kind})"
 
     def summary(self) -> dict:
         return {"language": self.language, "language_name": self.language_name, "generated": self.generated,
                 "translated": self.translated, "method": self.method, "lines": len(self.segments),
-                "words": self.words, "describe": self.describe()}
+                "words": self.words, "describe": self.describe(), "needs_translation": self.needs_translation}
 
 
 def _clean(text: str) -> str:
@@ -216,9 +221,25 @@ def merge_snippets(snippets: list[tuple[float, float, str]]) -> list:
     """Join caption fragments (about 3 s each, often unpunctuated) into lines of 5-14 seconds."""
     from .transcript import SENTENCE_END, Segment
 
-    rows = [(start, dur, _clean(text)) for start, dur, text in snippets]
-    rows = [r for r in rows if r[2]]
-    rows.sort(key=lambda r: r[0])
+    ordered = sorted(((s, d, _clean(t)) for s, d, t in snippets), key=lambda r: r[0])
+    rows = []
+    for i, (start, dur, text) in enumerate(ordered):
+        if not text:
+            continue
+        # "…इस्तेमाल कर रहे हैं। लेकिन यहां…": a sentence often ends inside a
+        # fragment. Split there, sharing the fragment's time by length, so lines
+        # hold whole sentences (and translate as whole sentences). Captions
+        # overlap, so the share is taken only up to the next fragment's start,
+        # which keeps every word in its original order.
+        nxt = ordered[i + 1][0] if i + 1 < len(ordered) else start + dur
+        span = min(dur, nxt - start) if nxt > start else dur
+        parts = [p for p in re.split(r"(?<=[.?!।])\s+", text) if p]
+        total = sum(len(p) for p in parts) or 1
+        t = start
+        for p in parts:
+            share = span * len(p) / total
+            rows.append((t, share, p))
+            t += share
     segments: list[Segment] = []
     words: list[str] = []
     start = end = None
@@ -285,15 +306,16 @@ def fetch_captions(video_id: str) -> Captions:
                 return t
         return None
 
-    chosen, translated = pick(manual=True) or pick(manual=False), False
+    chosen, translated, needs_translation = pick(manual=True) or pick(manual=False), False, False
     if chosen is None:
         source = next((t for t in listing if t.is_translatable), None)
-        if source is None:
-            names = ", ".join(sorted({t.language.replace(" (auto-generated)", "") for t in listing}))
-            raise CaptionsUnavailable(
-                f"This video only has captions in {names}, and YouTube can't translate them to English. "
-                "Study Corner works with English lectures only.", kind="not_english")
-        chosen, translated = source.translate("en"), True
+        if source is not None:
+            chosen, translated = source.translate("en"), True
+        else:
+            # YouTube can't translate these (common for Hindi auto-captions).
+            # Use them as they are; Amazon Translate makes them English later.
+            chosen = next((t for t in listing if not t.is_generated), listing[0])
+            needs_translation = True
     try:
         fetched = chosen.fetch()
     except Exception as exc:  # noqa: BLE001
@@ -303,7 +325,8 @@ def fetch_captions(video_id: str) -> Captions:
         raise CaptionsUnavailable("The captions are almost empty, so there isn't enough to make notes from.")
     caps = Captions(language="en" if translated else chosen.language_code,
                     language_name=chosen.language, generated=bool(chosen.is_generated),
-                    translated=translated, method="youtube", segments=segments)
+                    translated=translated, method="youtube", segments=segments,
+                    needs_translation=needs_translation)
     _cache[video_id] = (_time.time(), caps)
     return caps
 
@@ -342,9 +365,10 @@ def parse_pasted(text: str, video_seconds: int = 0) -> Captions:
                                   "make sure the times are shown, then copy everything and paste it here.")
     letters = re.findall(r"[^\W\d_]", " ".join(e[1] for e in entries))
     latin = sum(1 for ch in letters if ch.isascii())
+    language, name, needs_translation = "en", "English", False
     if letters and latin / len(letters) < 0.6:
-        raise CaptionsUnavailable("The pasted transcript isn't in English. Study Corner works with English "
-                                  "lectures only.", kind="not_english")
+        language, name = _guess_language(letters)
+        needs_translation = True
     snippets = []
     for i, (start, line) in enumerate(entries):
         nxt = entries[i + 1][0] if i + 1 < len(entries) else (video_seconds or start + 5)
@@ -352,8 +376,26 @@ def parse_pasted(text: str, video_seconds: int = 0) -> Captions:
     segments = merge_snippets(snippets)
     if sum(len(s.text.split()) for s in segments) < 40:
         raise CaptionsUnavailable("The pasted transcript is too short to make notes from.")
-    return Captions(language="en", language_name="English", generated=False, translated=False,
-                    method="pasted", segments=segments)
+    return Captions(language=language, language_name=name, generated=False, translated=False,
+                    method="pasted", segments=segments, needs_translation=needs_translation)
+
+
+# Unicode blocks of Indian scripts -> Amazon Translate language code.
+_SCRIPTS = [((0x0900, 0x097F), "hi", "Hindi"), ((0x0980, 0x09FF), "bn", "Bengali"),
+            ((0x0A80, 0x0AFF), "gu", "Gujarati"), ((0x0B80, 0x0BFF), "ta", "Tamil"),
+            ((0x0C00, 0x0C7F), "te", "Telugu"), ((0x0C80, 0x0CFF), "kn", "Kannada"),
+            ((0x0D00, 0x0D7F), "ml", "Malayalam"), ((0x0A00, 0x0A7F), "pa", "Punjabi")]
+
+
+def _guess_language(letters: list[str]) -> tuple[str, str]:
+    counts = {}
+    for ch in letters:
+        for (lo, hi), code, name in _SCRIPTS:
+            if lo <= ord(ch) <= hi:
+                counts[(code, name)] = counts.get((code, name), 0) + 1
+    if counts:
+        return max(counts, key=counts.get)
+    return "auto", "another language"
 
 
 def plan(link: str) -> dict:
@@ -383,6 +425,8 @@ def plan(link: str) -> dict:
     out["captions"] = caps.summary()
     out["note"] = (f"{why}, so it isn't downloaded. It plays from YouTube on the notes page, and the notes are "
                    f"made from {caps.describe()}: {caps.words:,} words. The board and slides aren't read.")
+    if caps.needs_translation:
+        out["note"] += " The notes, quiz and chat will be in English."
     return out
 
 

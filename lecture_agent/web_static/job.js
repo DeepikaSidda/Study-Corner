@@ -178,7 +178,10 @@ function humanize(text) {
   if (t.startsWith("uploading audio")) return ["cloud", "Uploading the audio to a private S3 bucket"];
   if (/^transcription job .* started/.test(t)) return ["listen", "Transcription started"];
   if ((m = t.match(/^listen: (\d+) segments/))) return ["check", `Transcript ready: ${m[1]} timed lines`, "ok"];
-  if ((m = t.match(/^listen: using (YouTube's .+|the pasted transcript)$/))) return ["check", `Using ${m[1]}`, "ok"];
+  if ((m = t.match(/^translate: (\d+) lines \(([\d,]+) characters\)/))) return ["chat", `Translating ${m[1]} lines (${m[2]} characters) to English with Amazon Translate`];
+  if ((m = t.match(/^translate: done, ([\d,]+) English words/))) return ["check", `Translated: ${m[1]} English words`, "ok"];
+  if (t.startsWith("translate: reusing")) return ["check", "Using the saved English translation", "ok"];
+  if ((m = t.match(/^listen: using (YouTube's .+|the pasted transcript.*)$/))) return ["check", `Using ${m[1]}`, "ok"];
   if (t.startsWith("listen: reusing") || t.startsWith("listen: using")) return ["check", "Using the saved transcript", "ok"];
   if (t.startsWith("look: skipped, the video stays on YouTube")) return ["youtube", "The video stays on YouTube, so the board isn't read"];
   if ((m = t.match(/^look: (\d+) frames sampled, (\d+) kept/))) return ["look", `Found ${m[2]} slide changes in ${m[1]} frames`];

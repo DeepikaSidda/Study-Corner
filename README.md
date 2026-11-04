@@ -213,6 +213,15 @@ downloaded**. Instead:
   (the approach used in the Smart-Podcast-Finder project). If YouTube only
   has captions in another language, it translates them to English when it
   can; if not, the video is refused.
+- If the only captions are in another language that YouTube can't translate
+  (common for Hindi auto-captions), each timed line is translated to English
+  with **Amazon Translate** (`lecture_agent/translate.py`). Times stay the
+  same, so chapters, ▶ links and quiz checks all work on the English lines.
+  Pasted transcripts in Hindi, Tamil, Telugu and other Indian scripts are
+  translated the same way. Tested on a 15:38 Hindi video (Prashant Kirad,
+  "Complete AI Masterclass for Students"): 122 lines, 15,810 characters
+  translated in 9 s, then 6 chapters, 99% coverage, 10 of 10 quiz questions
+  verified, and the chat answered "What does RCTO stand for?" with ▶ 04:29.
 - If YouTube doesn't share the captions, the page asks the student to paste
   the transcript (with its times) from "Show transcript".
 - Amazon Transcribe isn't used, so it is cheaper and faster: a 5-minute video

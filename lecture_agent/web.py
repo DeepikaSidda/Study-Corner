@@ -96,14 +96,28 @@ def _worker() -> None:
             source = job.get("source") or {}
             if source.get("mode") in ("captions", "pasted"):
                 # Never downloaded: notes come from the timed captions saved at submit.
-                from .transcript import Segment
+                from .transcript import Segment, save_segments
 
-                rows = json.loads((_job_dir(job_id) / "captions.json").read_text(encoding="utf-8"))
+                folder = _job_dir(job_id)
+                rows = json.loads((folder / "captions.json").read_text(encoding="utf-8"))
+                lines = [Segment(**r) for r in rows]
+                caps = source.get("captions") or {}
+                if caps.get("needs_translation"):
+                    english = folder / "captions.en.json"
+                    if english.exists():  # a rerun: don't pay for the translation twice
+                        lines = [Segment(**r) for r in json.loads(english.read_text(encoding="utf-8"))]
+                        _log(job_id, "translate: reusing the saved English translation")
+                    else:
+                        from . import translate
+
+                        lines = translate.to_english(lines, caps.get("language", "auto"),
+                                                     log=lambda m, j=job_id: _log(j, m))
+                        save_segments(lines, english)
                 opts = job["options"]
                 pipeline.run(
                     None,
-                    _job_dir(job_id),
-                    segments=[Segment(**r) for r in rows],
+                    folder,
+                    segments=lines,
                     lecture_seconds=float(source["video"].get("seconds") or 0) or None,
                     transcript_label=source.get("captions", {}).get("describe", "the captions"),
                     notes_language=opts["notes_language"],
