@@ -72,13 +72,13 @@ def whoami() -> dict:
     return {"account": ident["Account"], "arn": ident["Arn"], "region": REGION, "model": MODEL_ID}
 
 
-def model(temperature: float = 0.2):
+def model(temperature: float = 0.2, max_tokens: int | None = None):
     """A Bedrock model bound to the configured session."""
     from strands.models import BedrockModel
 
     return BedrockModel(
         model_id=MODEL_ID,
         boto_session=session(),
-        max_tokens=MAX_TOKENS,
+        max_tokens=max_tokens or MAX_TOKENS,
         temperature=temperature,
     )

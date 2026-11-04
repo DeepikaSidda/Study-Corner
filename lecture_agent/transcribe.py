@@ -16,6 +16,9 @@ from pathlib import Path
 
 from . import config
 
+# Languages Transcribe chooses between when language="auto" (env: LECTURE_LANGUAGE_OPTIONS).
+LANGUAGE_OPTIONS = os.environ.get("LECTURE_LANGUAGE_OPTIONS", "en-US,en-IN,en-GB,hi-IN,ta-IN,te-IN")
+
 FORMATS = {".flac": "flac", ".mp3": "mp3", ".mp4": "mp4", ".wav": "wav", ".m4a": "m4a", ".ogg": "ogg", ".webm": "webm"}
 
 
@@ -80,6 +83,11 @@ def transcribe(
         }
         if language == "auto":
             params["IdentifyLanguage"] = True
+            # A short list makes identification more accurate than "any language",
+            # and lets Indian-accented English come back as en-IN.
+            options = [c.strip() for c in LANGUAGE_OPTIONS.split(",") if c.strip()]
+            if len(options) >= 2:
+                params["LanguageOptions"] = options
         else:
             params["LanguageCode"] = language
         tx.start_transcription_job(**params)

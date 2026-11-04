@@ -36,7 +36,7 @@ STATIC = Path(__file__).parent / "web_static"
 MAX_UPLOAD_MB = int(os.environ.get("LECTURE_MAX_UPLOAD_MB", "2048"))
 VIDEO_TYPES = {".mp4", ".mov", ".m4v", ".webm", ".mkv", ".avi"}
 AUDIO_TYPES = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
-LECTURE_LANGUAGE = "en-US"  # Amazon Transcribe language code
+LECTURE_LANGUAGE = "auto"  # Transcribe identifies the language; non-English is translated to English
 NOTES_LANGUAGE = "English"
 JOB_ID = re.compile(r"^[0-9a-f]{12}$")
 FRAME_NAME = re.compile(r"^f_\d{5}\.jpg$")
@@ -53,10 +53,24 @@ def _job_dir(job_id: str) -> Path:
 
 
 def _save(job: dict) -> None:
+    """Write job.json safely. On Windows another program (antivirus, search
+    indexer, an editor) can hold the file open for a moment, and replacing it
+    then fails with "Access is denied". Retry, and never let a failed save
+    stop the lecture: the job is kept in memory and saved on the next change."""
     path = _job_dir(job["id"]) / "job.json"
     tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(job, indent=2, ensure_ascii=False), encoding="utf-8")
-    tmp.replace(path)
+    text = json.dumps(job, indent=2, ensure_ascii=False)
+    for attempt in range(8):
+        try:
+            tmp.write_text(text, encoding="utf-8")
+            tmp.replace(path)
+            return
+        except PermissionError:
+            time.sleep(0.15 * (attempt + 1))
+    try:
+        path.write_text(text, encoding="utf-8")  # last resort: write in place
+    except OSError as exc:
+        print(f"warning: could not save {path}: {exc}")
 
 
 def _update(job_id: str, **changes) -> None:

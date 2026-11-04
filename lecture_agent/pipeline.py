@@ -72,12 +72,36 @@ def run(
         log("listen: Amazon Transcribe")
         raw = transcribe(audio, language=language, log=log)
         raw_path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
+    spoken = None
     if segments is None:
         segments = parse_transcribe_json(raw)
+        spoken = raw.get("detected_language") or (language if language != "auto" else None)
+        if spoken:
+            log(f"listen: spoken language {spoken}")
     if not segments:
         raise ValueError("The transcript is empty; is there speech in this recording?")
+
+    # A lecture in another language (e.g. Hindi) becomes English line by line
+    # with Amazon Translate, times unchanged, so notes, quiz checks and chat
+    # citations all work on the same English lines.
+    if spoken and not spoken.lower().startswith("en") and notes_language.lower().startswith("english"):
+        english_path = out_dir / "segments.en.json"
+        save_segments(segments, out_dir / "segments.original.json")
+        if english_path.exists():
+            from .transcript import Segment
+
+            segments = [Segment(**r) for r in json.loads(english_path.read_text(encoding="utf-8"))]
+            log("translate: reusing the saved English translation")
+        else:
+            from . import translate
+
+            segments = translate.to_english(segments, spoken, log=log)
+            save_segments(segments, english_path)
+        transcript_label = transcript_label or f"Amazon Transcribe ({spoken}), translated to English with Amazon Translate"
     save_segments(segments, out_dir / "segments.json")
     log(f"listen: {len(segments)} segments")
+    board_to_english = bool(spoken and not spoken.lower().startswith("en")
+                            and notes_language.lower().startswith("english"))
 
     # ---------------------------------------------------------------- look
     boards = []
@@ -91,7 +115,8 @@ def run(
             # One unreadable frame should not lose the whole lecture: skip it
             # (the transcript still covers what was said) and say so.
             try:
-                boards.append((frame, agents.read_board(frame)))
+                boards.append((frame, agents.read_board(frame, to_english=board_to_english,
+                                                        language=spoken or "auto")))
             except Exception as exc:  # noqa: BLE001
                 log(f"  look: skipped the frame at {fmt_time(frame.time)} ({type(exc).__name__}: {str(exc)[:80]})")
         log(f"look: {sum(1 for _, r in boards if r.has_content)} frames had board content")

@@ -178,6 +178,7 @@ function humanize(text) {
   if (t.startsWith("uploading audio")) return ["cloud", "Uploading the audio to a private S3 bucket"];
   if (/^transcription job .* started/.test(t)) return ["listen", "Transcription started"];
   if ((m = t.match(/^listen: (\d+) segments/))) return ["check", `Transcript ready: ${m[1]} timed lines`, "ok"];
+  if ((m = t.match(/^listen: spoken language (\S+)/))) return ["listen", `Spoken language: ${({ "hi-IN": "Hindi", "ta-IN": "Tamil", "te-IN": "Telugu", "en-IN": "English (India)", "en-US": "English (US)", "en-GB": "English (UK)" })[m[1]] || m[1]}`];
   if ((m = t.match(/^translate: (\d+) lines \(([\d,]+) characters\)/))) return ["chat", `Translating ${m[1]} lines (${m[2]} characters) to English with Amazon Translate`];
   if ((m = t.match(/^translate: done, ([\d,]+) English words/))) return ["check", `Translated: ${m[1]} English words`, "ok"];
   if (t.startsWith("translate: reusing")) return ["check", "Using the saved English translation", "ok"];

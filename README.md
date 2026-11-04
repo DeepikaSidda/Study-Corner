@@ -200,6 +200,28 @@ by Indently (CC BY, 4 min 4 s): 7.4 MB downloaded in about 12 s, then 37
 transcript lines, 7 screens of code read, 4 chapters, 10 key points, 100% of
 the lesson cited, and 8 of 8 quiz questions verified.
 
+### Uploads in Hindi, Tamil or Telugu
+
+Uploads no longer have to be in English. Amazon Transcribe identifies the
+spoken language (English US/India/UK, Hindi, Tamil or Telugu; set
+`LECTURE_LANGUAGE_OPTIONS` to change the list). A non-English lecture is
+translated to English line by line with Amazon Translate, times unchanged,
+and the original lines are kept in `segments.original.json`.
+
+Nova Pro can't read Hindi script on slides reliably: asked to translate a
+Hindi slide it invented "What is the capital of Madhya Pradesh?", and its
+structured reply failed outright on screens full of Hindi
+(`modelStreamErrorException`, about a minute per try). For non-English
+lectures the board reader now replies in plain text and keeps only the
+English letters, code, numbers and web addresses on screen; what the teacher
+says in Hindi still reaches the notes through Transcribe and Translate.
+
+Tested on ["How to contribute to Hindi Wikipedia"](https://commons.wikimedia.org/wiki/File:How_to_contribute_to_Hindi_Wikipedia.ogv)
+(Subhashish Panigrahi and Noopur Raval, CC BY-SA 3.0, 4 min 58 s): detected
+as hi-IN, 22 lines translated, 21 of 24 screens read with no failures,
+6 chapters, 91% covered, 8 of 8 quiz questions verified, in 167 s after
+transcription. An English clip still came back as en-US.
+
 ### YouTube videos that may not be downloaded
 
 Most YouTube videos have the standard licence, so they are **never
