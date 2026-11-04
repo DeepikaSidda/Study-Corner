@@ -110,7 +110,19 @@
           <span class="badge" id="yt-licence"></span>
         </div>
       </div>
+      <p class="yt-note" id="yt-note" hidden></p>
       <div class="alert yt-problems" id="yt-problems" hidden></div>
+
+      <div class="yt-paste" id="yt-paste" hidden>
+        <ol class="paste-steps">
+          <li>Open the video on YouTube and click <b>…more</b> under the title.</li>
+          <li>Click <b>Show transcript</b>. Keep the times showing.</li>
+          <li>Select the whole transcript, copy it, and paste it here.</li>
+        </ol>
+        <textarea name="transcript" id="yt-transcript" rows="6" maxlength="400000" spellcheck="false"
+          placeholder="0:00&#10;All right, so in this lecture we are going to…&#10;0:04&#10;…"></textarea>
+        <span class="muted small" id="yt-paste-count"></span>
+      </div>
 
       <div class="fields">
         <label class="field">Quiz questions
@@ -123,7 +135,7 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 3 1.9 4.6L18.5 9l-4.6 1.9L12 15.5l-1.9-4.6L5.5 9l4.6-1.4Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9Z"/></svg>
         <span id="yt-submit-text">Make my notes</span>
       </button>
-      <p class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a3.5 3.5 0 1 0 0 5"/></svg>Creative Commons videos only. The creator is credited.</p>
+      <p class="fine"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M14.5 9.5a3.5 3.5 0 1 0 0 5"/></svg>Only Creative Commons videos are downloaded. Others play from YouTube.</p>
     </form>
     </div>
   </section>
@@ -273,8 +285,23 @@
   const clock = s => { s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), r = String(s % 60).padStart(2, "0"); return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`; };
   let checkSeq = 0, checkTimer = null, existingJob = null;
 
+  const ytNote = document.getElementById("yt-note");
+  const ytPaste = document.getElementById("yt-paste");
+  const ytText = document.getElementById("yt-transcript");
+  const ytCount = document.getElementById("yt-paste-count");
+  let ytMode = null;
+  const pastedLines = () => (ytText.value.match(/^\s*\d{1,2}(:\d{2}){1,2}\s*/gm) || []).length;
+  function updatePasteState() {
+    if (ytMode !== "paste") return;
+    const n = pastedLines();
+    ytCount.textContent = ytText.value.trim() ? (n ? `${n} timed lines found` : "No times found yet. Keep the times showing in YouTube's transcript.") : "";
+    ytSubmit.disabled = {{YT_BUTTON_OFF}} || n < 3;
+  }
+  ytText.addEventListener("input", updatePasteState);
+
   function resetYt(message = "") {
     ytPreview.hidden = true; ytProblems.hidden = true; ytProblems.replaceChildren();
+    ytNote.hidden = true; ytPaste.hidden = true; ytMode = null;
     ytSubmit.disabled = true; existingJob = null; ytSubmitText.textContent = "Make my notes";
     ytStatus.textContent = message;
   }
@@ -301,9 +328,13 @@
     document.getElementById("yt-title").textContent = v.title;
     document.getElementById("yt-meta").textContent = `${v.channel} · ${clock(v.seconds)}`;
     const lic = document.getElementById("yt-licence");
-    const cc = v.license === "creativeCommon";
-    lic.className = `badge ${cc ? "done" : "failed"}`;
-    lic.textContent = cc ? "Creative Commons · can be used" : "Standard YouTube licence";
+    const label = {
+      download: ["done", "Creative Commons · full features"],
+      captions: ["running", "Plays from YouTube · notes from its captions"],
+      paste: ["running", "Plays from YouTube · paste the transcript"],
+    }[body.mode] || ["failed", "Can't be used"];
+    lic.className = `badge ${label[0]}`;
+    lic.textContent = label[1];
     ytPreview.hidden = false;
     ytStatus.textContent = "";
     if (body.problems.length) {
@@ -311,8 +342,13 @@
       ytProblems.replaceChildren(...body.problems.map(p => Object.assign(document.createElement("p"), { textContent: p })));
       return;
     }
+    ytMode = body.mode;
+    ytNote.textContent = body.note;
+    ytNote.hidden = !body.note;
     existingJob = body.existing_job;
+    ytPaste.hidden = ytMode !== "paste" || !!existingJob;
     ytSubmit.disabled = {{YT_BUTTON_OFF}};
+    if (ytMode === "paste" && !existingJob) updatePasteState();
     ytSubmitText.textContent = existingJob ? "Open the notes (already made)" : "Make my notes";
     if (existingJob) ytStatus.textContent = "Notes for this video were already made, so nothing new will be charged.";
   }

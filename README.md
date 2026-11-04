@@ -200,6 +200,37 @@ by Indently (CC BY, 4 min 4 s): 7.4 MB downloaded in about 12 s, then 37
 transcript lines, 7 screens of code read, 4 chapters, 10 key points, 100% of
 the lesson cited, and 8 of 8 quiz questions verified.
 
+### YouTube videos that may not be downloaded
+
+Most YouTube videos have the standard licence, so they are **never
+downloaded**. Instead:
+
+- The video plays from YouTube's own embedded player on the notes page.
+  Chapters, ▶ times and the `K` key control that player.
+- The notes are made from the video's **English captions**, the same timed
+  text YouTube shows under "Show transcript", read with
+  [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api)
+  (the approach used in the Smart-Podcast-Finder project). If YouTube only
+  has captions in another language, it translates them to English when it
+  can; if not, the video is refused.
+- If YouTube doesn't share the captions, the page asks the student to paste
+  the transcript (with its times) from "Show transcript".
+- Amazon Transcribe isn't used, so it is cheaper and faster: a 5-minute video
+  took 60 s. The board and slides aren't read, so there's no Board tab.
+- The credit says the video belongs to its creator and wasn't downloaded.
+
+Tested on ["Learn Python for loops in 5 minutes!"](https://www.youtube.com/watch?v=KWgYha0clzw)
+by Bro Code (standard licence): 25 timed lines from the auto-generated
+captions, 5 chapters with their own times, 8 of 8 quiz questions verified,
+no video or audio saved.
+
+The chat then answered "How do I count backwards?" with
+`reversed(range(10, 0))`, code the teacher never showed (it loops zero times).
+The citation check now also rejects code in an answer unless the board
+reader saw it on screen, and any sentence still showing unchecked code is
+removed before the student sees it. The next answer explained it in words
+with ▶ 01:55.
+
 This lesson found two more problems, now fixed:
 
 - **Two chapters at 00:00.** Amazon Transcribe's sentence list came back as

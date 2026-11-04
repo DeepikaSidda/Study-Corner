@@ -87,6 +87,61 @@ const UPLOAD_STEPS = ["listen", "look", "notes", "quiz", "done"];
 let STEPS = UPLOAD_STEPS;
 const STEP_ICON = { download: "download", listen: "listen", look: "look", notes: "notes", quiz: "quiz", done: "spark" };
 const isYouTube = job => (job.source || {}).type === "youtube";
+// Videos that may not be downloaded play from YouTube's own embedded player.
+const playsFromYouTube = job => isYouTube(job) && ["captions", "pasted"].includes(job.source.mode);
+
+// The YouTube embed, with the same small surface the page uses on a <video>:
+// currentTime (get/set), paused, play(), pause(), "timeupdate" events.
+function youtubePlayer(videoId) {
+  const id = /^[A-Za-z0-9_-]{11}$/.test(videoId) ? videoId : "";
+  const params = new URLSearchParams({ enablejsapi: "1", rel: "0", playsinline: "1", origin: location.origin });
+  const frame = el("iframe", {
+    src: `https://www.youtube-nocookie.com/embed/${id}?${params}`,
+    title: "Lecture video on YouTube", allow: "autoplay; encrypted-media; picture-in-picture; fullscreen",
+    allowfullscreen: true, referrerpolicy: "strict-origin-when-cross-origin",
+  });
+  const element = el("div", { class: "yt-frame" }, frame);
+  const listeners = [];
+  let api = null, pending = null, now = 0, state = -1;
+
+  const adapter = {
+    element,
+    get currentTime() { return api ? api.getCurrentTime() : now; },
+    set currentTime(t) {
+      now = t;
+      if (api) api.seekTo(t, true);
+      else pending = t;
+    },
+    get paused() { return state !== 1; },
+    play() {
+      if (api) api.playVideo();
+      else frame.src = `https://www.youtube-nocookie.com/embed/${id}?${params}&autoplay=1&start=${Math.floor(now)}`;
+      return Promise.resolve();
+    },
+    pause() { if (api) api.pauseVideo(); },
+    addEventListener(type, fn) { if (type === "timeupdate") listeners.push(fn); },
+    scrollIntoView(opts) { element.scrollIntoView(opts); },
+  };
+
+  const ready = () => {
+    api = new YT.Player(frame, {
+      events: {
+        onReady: () => { if (pending !== null) { api.seekTo(pending, true); pending = null; } },
+        onStateChange: e => { state = e.data; },
+      },
+    });
+    setInterval(() => { if (state === 1) { now = api.getCurrentTime(); listeners.forEach(fn => fn()); } }, 400);
+  };
+  if (window.YT && window.YT.Player) ready();
+  else {
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => { if (previous) previous(); ready(); };
+    if (!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')) {
+      document.head.append(el("script", { src: "https://www.youtube.com/iframe_api", async: true }));
+    }
+  }
+  return adapter;
+}
 let elapsedTimer = null;
 
 function parseLog(lines) {
@@ -123,7 +178,9 @@ function humanize(text) {
   if (t.startsWith("uploading audio")) return ["cloud", "Uploading the audio to a private S3 bucket"];
   if (/^transcription job .* started/.test(t)) return ["listen", "Transcription started"];
   if ((m = t.match(/^listen: (\d+) segments/))) return ["check", `Transcript ready: ${m[1]} timed lines`, "ok"];
+  if ((m = t.match(/^listen: using (YouTube's .+|the pasted transcript)$/))) return ["check", `Using ${m[1]}`, "ok"];
   if (t.startsWith("listen: reusing") || t.startsWith("listen: using")) return ["check", "Using the saved transcript", "ok"];
+  if (t.startsWith("look: skipped, the video stays on YouTube")) return ["youtube", "The video stays on YouTube, so the board isn't read"];
   if ((m = t.match(/^look: (\d+) frames sampled, (\d+) kept/))) return ["look", `Found ${m[2]} slide changes in ${m[1]} frames`];
   if ((m = t.match(/^look: (\d+) frames had/))) return ["check", `Read the board on ${m[1]} slides`, "ok"];
   if (t.startsWith("look: skipped")) return ["info", "No video track, so the board was skipped"];
@@ -139,8 +196,16 @@ function humanize(text) {
 }
 
 function renderProgress(job) {
-  STEPS = isYouTube(job) ? ["download", ...UPLOAD_STEPS] : UPLOAD_STEPS;
-  document.querySelector('#steps li[data-step="download"]').hidden = !isYouTube(job);
+  const downloads = isYouTube(job) && !playsFromYouTube(job);
+  STEPS = downloads ? ["download", ...UPLOAD_STEPS] : UPLOAD_STEPS;
+  document.querySelector('#steps li[data-step="download"]').hidden = !downloads;
+  if (playsFromYouTube(job)) {
+    const caps = job.source.captions || {};
+    const listen = document.querySelector('#steps li[data-step="listen"]');
+    listen.querySelector("b").textContent = "Reading the transcript";
+    listen.querySelector("small").textContent = `From ${caps.describe || "the captions"}, with their times`;
+    document.querySelector('#steps li[data-step="look"] small').textContent = "Skipped: the video stays on YouTube";
+  }
   const entries = parseLog(job.log);
   const starts = stepStarts(entries);
   let current = STEPS[0];
@@ -264,19 +329,27 @@ async function showResult(job) {
     const v = job.source.video;
     const ext = { target: "_blank", rel: "noopener noreferrer" };
     const safe = url => (/^https:\/\/www\.youtube\.com\//.test(url || "") ? url : null);
-    document.getElementById("meta").after(el("p", { class: "credit" }, icon("youtube"),
-      "From YouTube: ", el("a", { href: safe(v.url), ...ext }, v.title),
-      " by ", v.channel_url ? el("a", { href: safe(v.channel_url), ...ext }, v.channel) : v.channel,
-      " · ", el("a", { href: "https://creativecommons.org/licenses/by/3.0/", ...ext }, "CC BY"),
-      ". Notes made by Study Corner."));
+    const who = [el("a", { href: safe(v.url), ...ext }, v.title),
+      " by ", v.channel_url ? el("a", { href: safe(v.channel_url), ...ext }, v.channel) : v.channel];
+    const credit = playsFromYouTube(job)
+      ? [icon("youtube"), "Video: ", ...who, ". Plays from YouTube and was not downloaded. Notes made by Study Corner from ",
+        (job.source.captions || {}).describe || "its captions", "."]
+      : [icon("youtube"), "From YouTube: ", ...who, " · ",
+        el("a", { href: "https://creativecommons.org/licenses/by/3.0/", ...ext }, "CC BY"), ". Notes made by Study Corner."];
+    document.getElementById("meta").after(el("p", { class: "credit" }, ...credit));
   }
 
   // ---- player, timeline and chapters
-  const attrs = { controls: true, preload: "metadata", src: `${base}/files/media`, playsinline: true };
-  const cover = data.board.find(b => b.has_content) || data.board[0];
-  if (job.kind !== "audio" && cover) attrs.poster = `${base}/frames/${cover.frame}`;
-  player = el(job.kind === "audio" ? "audio" : "video", attrs);
-  document.getElementById("media").append(player);
+  if (playsFromYouTube(job)) {
+    player = youtubePlayer(job.source.video.id);
+    document.getElementById("media").append(player.element);
+  } else {
+    const attrs = { controls: true, preload: "metadata", src: `${base}/files/media`, playsinline: true };
+    const cover = data.board.find(b => b.has_content) || data.board[0];
+    if (job.kind !== "audio" && cover) attrs.poster = `${base}/frames/${cover.frame}`;
+    player = el(job.kind === "audio" ? "audio" : "video", attrs);
+    document.getElementById("media").append(player);
+  }
 
   const chapters = notes.sections
     .map((s, i) => ({ n: i + 1, title: s.title, start: at(s.segment_ids) }))
@@ -318,7 +391,9 @@ async function showResult(job) {
     ask: { label: "Ask", icon: "chat", build: () => askPane(notes) },
     quality: { label: "Quality", icon: "shield", build: () => qualityPane(m, data.quiz.length) },
   };
+  if (playsFromYouTube(job)) delete panes.board;  // no video frames, so nothing to read
   const keys = Object.keys(panes);
+  document.getElementById("tab-count").textContent = String(keys.length);
   const tabs = document.getElementById("tabs");
   const holder = document.getElementById("panes");
   const built = {};  // each pane is built once, so quiz answers and the chat survive tab switches
@@ -673,6 +748,7 @@ function qualityPane(m, shown) {
         step("Judge agent agrees"), arrow(),
         step("✓ Saved", true))),
     el("table", { class: "details" }, [
+      ["Transcript from", m.transcript_source || "Amazon Transcribe"],
       ["Transcript lines", n.segments_total],
       ["Lines cited by the notes", n.segments_cited],
       ["Board frames sampled → kept", `${m.frames_sampled} → ${m.frames_kept}`],

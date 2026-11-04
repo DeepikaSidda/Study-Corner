@@ -257,7 +257,11 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .yt-text { display: grid; gap: 5px; min-width: 0; }
 .yt-text b { font-size: .95rem; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .yt-text .badge { justify-self: start; text-transform: none; }
-.yt-problems { display: grid; gap: 6px; }
+.yt-problems { display: grid; gap: 6px; margin-bottom: 14px; }
+.yt-note { margin: -4px 2px 14px; font-size: .85rem; line-height: 1.5; color: var(--ink-2); }
+.yt-paste { display: grid; gap: 8px; margin-bottom: 14px; padding: 14px; border-radius: 16px; border: 1px dashed var(--line-strong); background: var(--surface-2); }
+.paste-steps { margin: 0; padding-left: 20px; font-size: .85rem; color: var(--ink-2); display: grid; gap: 3px; }
+.yt-paste textarea { width: 100%; min-height: 120px; resize: vertical; font: .85rem/1.5 var(--mono); }
 .yt-problems p { margin: 0; }
 @media (max-width: 480px) { .yt-preview { grid-template-columns: 104px minmax(0, 1fr); } .yt-preview img { width: 104px; } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -432,6 +436,8 @@ details.log pre { margin: 10px 0 0; padding: 14px; border-radius: 12px; backgrou
 .player-card { position: sticky; top: calc(var(--nav-h) + 16px); padding: 12px; display: grid; gap: 14px; }
 @media (max-width: 1020px) { .player-card { position: static; } }
 .media video, .media audio { width: 100%; border-radius: 14px; background: #000; display: block; }
+.yt-frame { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: #000; }
+.yt-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
 .media audio { background: transparent; }
 
 .timeline { position: relative; height: 34px; display: flex; gap: 3px; padding: 0 2px; }

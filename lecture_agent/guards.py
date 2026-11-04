@@ -136,6 +136,35 @@ class QuizCompletion(SteeringHandler):
         )
 
 
+# Code in a chat answer: `inline code`, ```blocks```, or a bare call like range(10, 0).
+CODE_SPAN = re.compile(r"```(?:\w+\n)?(.*?)```|`([^`\n]+)`", re.S)
+CODE_CALL = re.compile(r"\b[A-Za-z_]\w*\((?:[^()\n]|\([^()\n]*\))*\)")
+
+
+def _squash(text: str) -> str:
+    text = text.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    return re.sub(r"\s+", "", text).lower()
+
+
+def unverified_code(text: str, index) -> list[str]:
+    """Code in an answer that was not on the board or slides, so the model wrote it itself.
+
+    A real answer about counting backwards gave `reversed(range(10, 0))`, which
+    is an empty loop in Python. The teacher had only said it out loud. Code can
+    only be shown if read_board saw it, copied as it was.
+    """
+    board = _squash(" ".join(b.get("text", "") + " " + " ".join(b.get("formulas", []))
+                             for b in getattr(index, "boards", []) or []))
+    found = [a or b for a, b in CODE_SPAN.findall(text)]
+    found += CODE_CALL.findall(CODE_SPAN.sub(" ", text))
+    out = []
+    for code in found:
+        code = code.strip()
+        if code and _squash(code) not in board and code not in out:
+            out.append(code)
+    return out
+
+
 class CitationCheck(SteeringHandler):
     """A chat answer must cite times, and only times the tools showed the agent.
 
@@ -172,6 +201,14 @@ class CitationCheck(SteeringHandler):
             return self._reject(
                 f"Write each citation as one time on its own, exactly as the tools show it, for example [03:14]. "
                 f"These cannot be checked: {', '.join(unverifiable[:3])}."
+            )
+
+        made_up = unverified_code(text, self.index)
+        if made_up:
+            return self._reject(
+                f"Your answer shows code that is not on the board or slides: {', '.join(made_up[:3])}. "
+                "Don't write code yourself. Explain in words what the teacher said, and cite the time "
+                "so the student can see the real code in the video."
             )
 
         cited = CITED_TIME.findall(text)

@@ -25,9 +25,12 @@ from .transcript import fmt_time, parse_transcribe_json, save_segments
 
 
 def run(
-    source: Path,
+    source: Path | None,
     out_dir: Path,
     *,
+    segments: list | None = None,
+    lecture_seconds: float | None = None,
+    transcript_label: str = "",
     language: str = "en-US",
     notes_language: str = "English",
     questions: int = 10,
@@ -39,14 +42,22 @@ def run(
     transcript_json: Path | None = None,
     log=print,
 ) -> dict:
+    """Make notes and a quiz from a media file, or from transcript lines that
+    are already timed (`segments`, e.g. YouTube captions; no media needed)."""
     started = time.time()
     out_dir.mkdir(parents=True, exist_ok=True)
-    lecture_seconds = media.media_duration(source)
-    log(f"lecture: {source.name} ({lecture_seconds:.0f}s)")
+    if segments is not None:
+        lecture_seconds = lecture_seconds or (segments[-1].end if segments else 0.0)
+        log(f"lecture: {transcript_label or 'transcript'} ({lecture_seconds:.0f}s)")
+    else:
+        lecture_seconds = media.media_duration(source)
+        log(f"lecture: {source.name} ({lecture_seconds:.0f}s)")
 
     # ---------------------------------------------------------------- listen
     raw_path = out_dir / "transcribe.json"
-    if transcript_json:
+    if segments is not None:
+        log(f"listen: using {transcript_label or 'the given transcript'}")
+    elif transcript_json:
         raw = json.loads(Path(transcript_json).read_text(encoding="utf-8"))
         log(f"listen: using transcript {transcript_json}")
     elif raw_path.exists():
@@ -61,7 +72,8 @@ def run(
         log("listen: Amazon Transcribe")
         raw = transcribe(audio, language=language, log=log)
         raw_path.write_text(json.dumps(raw, ensure_ascii=False), encoding="utf-8")
-    segments = parse_transcribe_json(raw)
+    if segments is None:
+        segments = parse_transcribe_json(raw)
     if not segments:
         raise ValueError("The transcript is empty; is there speech in this recording?")
     save_segments(segments, out_dir / "segments.json")
@@ -70,7 +82,7 @@ def run(
     # ---------------------------------------------------------------- look
     boards = []
     sampled = kept = 0
-    if read_board and media.has_video(source):
+    if read_board and source is not None and media.has_video(source):
         frames = media.sample_frames(source, out_dir / "frames", every_seconds=frame_every)
         changed = media.slide_changes(frames, threshold=change_threshold, max_frames=max_frames)
         sampled, kept = len(frames), len(changed)
@@ -83,6 +95,8 @@ def run(
             except Exception as exc:  # noqa: BLE001
                 log(f"  look: skipped the frame at {fmt_time(frame.time)} ({type(exc).__name__}: {str(exc)[:80]})")
         log(f"look: {sum(1 for _, r in boards if r.has_content)} frames had board content")
+    elif source is None:
+        log("look: skipped, the video stays on YouTube")
     else:
         log("look: skipped")
 
@@ -103,6 +117,7 @@ def run(
     # ---------------------------------------------------------------- render
     metrics = {
         "lecture_seconds": lecture_seconds,
+        "transcript_source": transcript_label or ("Amazon Transcribe" if not transcript_json else "given transcript"),
         "processing_seconds": round(time.time() - started, 1),
         "frames_sampled": sampled,
         "frames_kept": kept,

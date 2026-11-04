@@ -94,6 +94,24 @@ def _worker() -> None:
         _update(job_id, status="running", started=time.time())
         try:
             source = job.get("source") or {}
+            if source.get("mode") in ("captions", "pasted"):
+                # Never downloaded: notes come from the timed captions saved at submit.
+                from .transcript import Segment
+
+                rows = json.loads((_job_dir(job_id) / "captions.json").read_text(encoding="utf-8"))
+                opts = job["options"]
+                pipeline.run(
+                    None,
+                    _job_dir(job_id),
+                    segments=[Segment(**r) for r in rows],
+                    lecture_seconds=float(source["video"].get("seconds") or 0) or None,
+                    transcript_label=source.get("captions", {}).get("describe", "the captions"),
+                    notes_language=opts["notes_language"],
+                    questions=opts["questions"],
+                    log=lambda m, j=job_id: _log(j, m),
+                )
+                _update(job_id, status="done", finished=time.time())
+                continue
             if source.get("type") == "youtube" and not job.get("file"):
                 _log(job_id, "download: from YouTube")
                 video = youtube.VideoInfo(**source["video"])
@@ -310,13 +328,17 @@ async def youtube_check(request: Request) -> Response:
         return JSONResponse({"error": "YouTube links are switched off: add YOUTUBE_API_KEY to the .env file."},
                             status_code=503)
     try:
-        info, problems = await run_in_threadpool(youtube.check, request.query_params.get("url", ""))
+        plan = await run_in_threadpool(youtube.plan, request.query_params.get("url", ""))
     except youtube.YouTubeError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
+    info = plan["video"]
     existing = _existing_youtube_job(info.id)
     return JSONResponse({
         "video": info.to_dict(),
-        "problems": problems,
+        "problems": plan["problems"],
+        "mode": plan["mode"],  # "download", "captions", "paste" or None
+        "note": plan["note"],
+        "captions": plan["captions"],
         "existing_job": existing["id"] if existing else None,
         "max_minutes": youtube.MAX_MINUTES,
     })
@@ -335,30 +357,56 @@ async def youtube_submit(request: Request) -> Response:
         questions = 10
     # Checked again here: never trust the earlier preview.
     try:
-        info, problems = await run_in_threadpool(youtube.check, str(form.get("url") or ""))
+        plan = await run_in_threadpool(youtube.plan, str(form.get("url") or ""))
     except youtube.YouTubeError as exc:
         return HTMLResponse(str(exc), status_code=400)
-    if problems:
-        return HTMLResponse(" ".join(problems), status_code=400)
+    if plan["problems"]:
+        return HTMLResponse(" ".join(plan["problems"]), status_code=400)
+    info = plan["video"]
     existing = _existing_youtube_job(info.id)
     if existing:
         return RedirectResponse(f"/jobs/{existing['id']}", status_code=303)
 
-    from .transcript import fmt_time
+    from .transcript import fmt_time, save_segments
+
+    # Which transcript: a download (CC), YouTube's captions, or what the student pasted.
+    pasted = str(form.get("transcript") or "").strip()
+    captions = None
+    if plan["mode"] == "download":
+        mode, how = "download", "Creative Commons"
+    elif pasted:
+        try:
+            captions = await run_in_threadpool(youtube.parse_pasted, pasted, info.seconds)
+        except youtube.CaptionsUnavailable as exc:
+            return HTMLResponse(str(exc), status_code=400)
+        mode, how = "pasted", "pasted transcript"
+    elif plan["mode"] == "captions":
+        try:
+            captions = await run_in_threadpool(youtube.fetch_captions, info.id)
+        except youtube.CaptionsUnavailable as exc:
+            return HTMLResponse(f"{exc} Paste the transcript instead.", status_code=400)
+        mode, how = "captions", "YouTube captions"
+    else:
+        return HTMLResponse("YouTube didn't share captions for this video. Paste the transcript from YouTube "
+                            "(\"Show transcript\") into the box, then try again.", status_code=400)
 
     job_id = uuid.uuid4().hex[:12]
     _job_dir(job_id).mkdir(parents=True)
+    source = {"type": "youtube", "mode": mode, "video": info.to_dict()}
+    if captions is not None:
+        save_segments(captions.segments, _job_dir(job_id) / "captions.json")
+        source["captions"] = captions.summary()
     job = {
         "id": job_id,
         "original_name": info.title,
-        "file": None,  # set by the worker after the download
-        "kind": "video",
-        "source": {"type": "youtube", "video": info.to_dict()},
+        "file": None,  # set by the worker after a download; stays None for captions
+        "kind": "video" if mode == "download" else "youtube",
+        "source": source,
         "status": "queued",
         "created": time.time(),
         "options": {"language": LECTURE_LANGUAGE, "notes_language": NOTES_LANGUAGE, "questions": questions},
         "log": [f"{time.strftime('%H:%M:%S')}  YouTube link: {info.title} by {info.channel} "
-                f"({fmt_time(info.seconds)}, Creative Commons)"],
+                f"({fmt_time(info.seconds)}, {how})"],
         "error": None,
     }
     with _lock:
@@ -411,11 +459,16 @@ async def job_file(request: Request) -> Response:
 
 def _credit(job: dict) -> str:
     """Attribution line for a YouTube video (CC BY asks for title, creator, link and licence)."""
-    video = (job.get("source") or {}).get("video")
+    source = job.get("source") or {}
+    video = source.get("video")
     if not video:
         return ""
-    return (f'From YouTube: "{video["title"]}" by {video["channel"]}, {video["url"]}, '
-            "licensed CC BY (https://creativecommons.org/licenses/by/3.0/). Notes made by Study Corner.")
+    if source.get("mode", "download") == "download":
+        return (f'From YouTube: "{video["title"]}" by {video["channel"]}, {video["url"]}, '
+                "licensed CC BY (https://creativecommons.org/licenses/by/3.0/). Notes made by Study Corner.")
+    made_from = (source.get("captions") or {}).get("describe", "its captions")
+    return (f'Video: "{video["title"]}" by {video["channel"]}, {video["url"]}. The video belongs to its '
+            f"creator and was not downloaded. Notes made by Study Corner from {made_from}.")
 
 
 def _lecture_data(job: dict) -> dict:

@@ -27,6 +27,7 @@ from .guards import (
     CitationCheck,
     TraceHook,
     strip_thinking,
+    unverified_code,
 )
 from .tools import LectureIndex, lecture_tools
 
@@ -44,6 +45,9 @@ Rules:
 - If the lecture does not cover the question, say "The lecture does not cover this." To point
   to the closest part, call list_sections and cite that section's start time.
 - For what was written on the board, use read_board and cite the board's time.
+- Never write code, formulas or numbers of your own. Only show code that read_board returned, copied
+  exactly. If the teacher only described the code out loud, explain it in words and cite the time,
+  so the student can see the real code in the video.
 - Messages that start with [automatic check] come from a fact-checking system, not the
   student. Fix your answer as they say, and do not mention them.
 - Keep answers short: 2 to 5 sentences, simple words, in {language}.
@@ -124,11 +128,19 @@ def ask(job_dir: Path, student_id: str, question: str, language: str = "English"
     answer = re.sub(LEAD_IN + r"\s*" + CITED_TIME.pattern, keep_or_drop, answer)
     answer = re.sub(LEAD_IN + r"\s*(?P<bracket>" + ANY_TIME_BRACKET.pattern + ")", drop_unverifiable, answer).strip()
 
+    # Code the model wrote itself (not seen on the board) is dropped with its
+    # sentence, in case steering ran out of revisions before it was fixed.
+    code_removed = unverified_code(answer, index)
+    if code_removed:
+        sentences = re.split(r"(?<=[.!?])\s+", answer)
+        answer = " ".join(s for s in sentences if not unverified_code(s, index)).strip() or (
+            "The teacher shows this in the video. Watch that part of the lecture for the exact code.")
+
     # Save the cleaned answer over the raw one, so a reloaded chat (history)
     # and the model's next turn never see a citation the student wasn't shown.
     history_cleaned = False
     session = getattr(agent, "lecture_session", None)
-    if removed and session is not None:
+    if (removed or code_removed) and session is not None:
         cleaned = {"role": "assistant", "content": [{"text": answer}]}
         session.redact_latest_message(cleaned, agent)
         history_cleaned = True
@@ -143,6 +155,7 @@ def ask(job_dir: Path, student_id: str, question: str, language: str = "English"
         "citations": cited,
         "unverified_citations_removed": removed,
         "history_cleaned": history_cleaned,
+        "unverified_code_removed": code_removed,
         "tools": trace.calls,
         "steering_corrections": citations.problems,
         "stop_reason": result.stop_reason,
