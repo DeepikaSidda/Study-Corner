@@ -42,6 +42,12 @@ Details are in [Setup](#setup) and [Web app](#web-app-upload-a-recorded-lecture)
 | YouTube link, Creative Commons | downloaded, then the same as an upload | read |
 | Any other YouTube link | never downloaded: plays in YouTube's player; notes from YouTube's captions, translated if needed, or a pasted transcript | not read |
 
+### Architecture
+
+![Study Corner architecture: the student adds a lecture; Amazon Transcribe, Amazon Translate or YouTube captions give the timed words; five Strands agents run on Amazon Bedrock; everything is stored in Amazon DynamoDB](docs/architecture.png)
+
+Drawn with the [`diagrams`](https://diagrams.mingrammer.com) library: `python docs/architecture.py`.
+
 ## Who it is for
 
 Students who miss lectures because they work, care for family or travel far

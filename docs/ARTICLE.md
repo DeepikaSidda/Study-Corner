@@ -38,6 +38,8 @@ Lectures in Hindi, Tamil or Telugu come out as English notes.
 
 ## How it works
 
+![Study Corner architecture](architecture.png)
+
 ```
 upload or YouTube link
   │

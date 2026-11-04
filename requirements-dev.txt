@@ -1,2 +1,3 @@
 -r requirements.txt
 strands-agents-evals>=1.7.0
+diagrams>=0.25   # docs/architecture.py; also needs Graphviz installed
