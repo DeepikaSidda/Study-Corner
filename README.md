@@ -24,7 +24,7 @@ DynamoDB and Amazon S3.
 
 ### Live demo
 
-**<http://54.225.36.174>** (Amazon EC2, us-east-1)
+**<https://54-225-36-174.sslip.io>** (Amazon EC2, us-east-1, HTTPS by Caddy + Let's Encrypt)
 
 Everything is open: upload a video, paste a YouTube link, or open the
 finished lectures (notes, quiz, board, chat, Show notes, PDF and search).
@@ -287,6 +287,7 @@ DynamoDB). The AWS user needs `dynamodb:CreateTable`, `DescribeTable`,
 | `deploy/check_access.py` | checks your AWS user can create everything (dry run, creates nothing) |
 | `deploy/package.py` | uploads the committed code and the finished lectures to S3; stores the YouTube key and a demo passcode in SSM Parameter Store as SecureStrings |
 | `deploy/launch.py` | creates an IAM role with only the permissions the app needs, a security group open on port 80 only (no SSH), and a t3.small Amazon Linux 2023 server that installs and runs the app as a systemd service |
+| `deploy/https.py` | adds HTTPS: opens port 443 and puts Caddy in front of the app with a free Let's Encrypt certificate for `<ip-with-dashes>.sslip.io`; http redirects to https |
 | `deploy/update.py` | ships the latest commit to the server and restarts it |
 | `deploy/remote.py "<cmd>"` | runs a command on the server through AWS Systems Manager |
 | `deploy/passcode.py` | prints the demo passcode |

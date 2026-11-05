@@ -157,6 +157,8 @@ plain HTML, CSS and JavaScript, no frontend framework.
 
 ## Try it
 
+Live demo: **<https://54-225-36-174.sslip.io>**
+
 Code: **[GitHub link]**. The README has setup in four commands.
 
 Study Corner started in the AWS *Strands Agents* workshop. Everything I
