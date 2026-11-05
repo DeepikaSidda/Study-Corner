@@ -15,10 +15,6 @@ Settings (environment variables):
     LECTURE_MAX_TOKENS    default 8000
     LECTURE_S3_BUCKET     bucket for Transcribe uploads (optional)
     YOUTUBE_API_KEY       YouTube Data API v3 key; enables "Paste a YouTube link"
-    WEBSHARE_PROXY_USERNAME, WEBSHARE_PROXY_PASSWORD
-                          optional Webshare residential proxy login. YouTube
-                          blocks caption requests from cloud servers (AWS),
-                          so the server fetches captions through it
 
 Settings can also go in a `.env` file in the project folder (git-ignored).
 Real environment variables win over `.env`.
@@ -47,8 +43,6 @@ def _load_env_file(path: Path = ENV_FILE) -> None:
 _load_env_file()
 
 YOUTUBE_API_KEY = os.environ.get("YOUTUBE_API_KEY") or None
-WEBSHARE_PROXY_USERNAME = os.environ.get("WEBSHARE_PROXY_USERNAME") or None
-WEBSHARE_PROXY_PASSWORD = os.environ.get("WEBSHARE_PROXY_PASSWORD") or None
 REGION = os.environ.get("LECTURE_AWS_REGION", "us-east-1")
 PROFILE = os.environ.get("LECTURE_AWS_PROFILE") or None
 MODEL_ID = os.environ.get("LECTURE_MODEL_ID", "us.amazon.nova-pro-v1:0")

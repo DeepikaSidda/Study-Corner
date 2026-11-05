@@ -268,17 +268,6 @@ def merge_snippets(snippets: list[tuple[float, float, str]]) -> list:
 _cache: dict[str, tuple[float, Captions]] = {}
 
 
-def _proxy_config():
-    """YouTube blocks caption requests from cloud servers such as AWS. With a
-    Webshare residential proxy login set, captions are fetched through it."""
-    if not (config.WEBSHARE_PROXY_USERNAME and config.WEBSHARE_PROXY_PASSWORD):
-        return None
-    from youtube_transcript_api.proxies import WebshareProxyConfig
-
-    return WebshareProxyConfig(proxy_username=config.WEBSHARE_PROXY_USERNAME,
-                               proxy_password=config.WEBSHARE_PROXY_PASSWORD)
-
-
 def fetch_captions(video_id: str) -> Captions:
     """English captions for a video, as timed transcript lines (no AWS, no API quota)."""
     import time as _time
@@ -291,7 +280,7 @@ def fetch_captions(video_id: str) -> Captions:
     except ImportError:
         raise CaptionsUnavailable("Captions support isn't installed (pip install youtube-transcript-api).") from None
 
-    api = YouTubeTranscriptApi(proxy_config=_proxy_config())
+    api = YouTubeTranscriptApi()
     try:
         listing = list(api.list(video_id))
     except Exception as exc:  # noqa: BLE001 - the library raises one type per YouTube refusal

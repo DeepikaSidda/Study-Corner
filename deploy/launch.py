@@ -86,12 +86,6 @@ get() {{ aws ssm get-parameter --region {REGION} --with-decryption --name "$1" -
 umask 077
 printf 'YOUTUBE_API_KEY=%s\\n' "$(get /study-corner/youtube-api-key)" > /opt/study-corner/app/.env
 if [ "${{STUDY_CORNER_DEMO:-0}}" = "1" ]; then export LECTURE_DEMO_PASSCODE="$(get /study-corner/demo-passcode)"; fi
-# webshare proxy (optional, set with deploy/proxy.py): YouTube blocks caption requests from AWS
-opt() {{ aws ssm get-parameter --region {REGION} --with-decryption --name "$1" --query Parameter.Value --output text 2>/dev/null || true; }}
-proxy_user="$(opt /study-corner/webshare-username)"; proxy_pass="$(opt /study-corner/webshare-password)"
-if [ -n "$proxy_user" ] && [ -n "$proxy_pass" ]; then
-  printf 'WEBSHARE_PROXY_USERNAME=%s\\nWEBSHARE_PROXY_PASSWORD=%s\\n' "$proxy_user" "$proxy_pass" >> /opt/study-corner/app/.env
-fi
 export LECTURE_AWS_REGION={REGION}
 exec /opt/study-corner/venv/bin/python -X utf8 -m lecture_agent.web --host 0.0.0.0 --port 80
 EOF
