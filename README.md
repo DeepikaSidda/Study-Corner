@@ -25,10 +25,8 @@ Amazon S3.
 6. [Run it yourself](#run-it-yourself)
 7. [Deploy it on AWS](#deploy-it-on-aws)
 8. [Results on real lectures](#results-on-real-lectures)
-9. [Testing](#testing)
-10. [Cost, limits and safety](#cost-limits-and-safety)
-11. [Project layout](#project-layout)
-12. [Credits](#credits)
+9. [Cost, limits and safety](#cost-limits-and-safety)
+10. [Credits](#credits)
 
 ---
 
@@ -190,8 +188,8 @@ decides what they are allowed to keep.
 ### 1. Install
 
 ```powershell
-git clone <this repository's URL> study-corner
-cd study-corner
+git clone https://github.com/DeepikaSidda/Study-Corner.git
+cd Study-Corner
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
@@ -263,22 +261,7 @@ existing notes.
 It writes `notes.md` and `lecture.json` to `output/<lecture>/`. Transcripts
 are cached there, so a rerun doesn't pay for Transcribe again.
 
-### Settings
 
-| Variable | Default | Meaning |
-|---|---|---|
-| `LECTURE_AWS_PROFILE` | none | AWS profile to use |
-| `LECTURE_AWS_REGION` | `us-east-1` | region |
-| `LECTURE_MODEL_ID` | `us.amazon.nova-pro-v1:0` | Bedrock model; must accept images |
-| `LECTURE_MAX_TOKENS` | `8000` | output limit per model call |
-| `LECTURE_S3_BUCKET` | `lecture-notes-agent-<account>-<region>` | bucket for Transcribe audio |
-| `LECTURE_LANGUAGE_OPTIONS` | `en-US,en-IN,en-GB,hi-IN,ta-IN,te-IN` | languages Transcribe chooses between |
-| `LECTURE_DDB_TABLE` | `study-corner-lectures` | DynamoDB table |
-| `LECTURE_DDB` | `on` | `off` runs without DynamoDB (local files only) |
-| `LECTURE_MAX_UPLOAD_MB` | `2048` | upload size limit |
-| `LECTURE_MAX_YOUTUBE_MINUTES` | `120` | longest YouTube video accepted |
-| `YOUTUBE_API_KEY` | none | enables YouTube links (put it in `.env`) |
-| `LECTURE_DEMO_PASSCODE` | none | optional demo mode: adding lectures needs this passcode; chat capped by `LECTURE_CHAT_PER_VISITOR_PER_DAY` (20) and `LECTURE_CHAT_PER_DAY` (200) |
 
 ## Deploy it on AWS
 
@@ -322,39 +305,9 @@ evaluations passed** (score 0.99). All in-scope answers had a verified ▶
 citation, both off-topic questions were refused, and every answer looked the
 lecture up first.
 
-### What real videos broke, and the fixes
 
-| Problem | Fix |
-|---|---|
-| The model reworded the teacher ("Chlorophyll traps…" for "It traps…") | the answer key shows the transcript's sentence, never the model's |
-| The right answer was always A | the answer moves to a different letter in each question (seeded, so the quiz is stable) |
-| The same fact was asked twice in different words | the duplicate check compares the evidence, not only the wording |
-| The chat cited a range `[00:11-00:37]` it couldn't verify | steering rejects any time format it can't check |
-| The chat invented code: `reversed(range(10, 0))`, which loops zero times | code in an answer must have been on screen; otherwise the sentence is removed |
-| Removing a bad time left "…which starts at." | the words leading up to a removed time go with it, in the answer and the saved history |
-| Two chapters started at 00:00: Transcribe's sentences ran up to 25 s | lines are rebuilt from word timings, 15 s at most |
-| Typed code wasn't "a new slide": a coding lesson gave 2 board readings | small screen changes count after 30 s: 7 readings for the same lesson |
-| Nova Pro invented text when reading Hindi slides ("What is the capital of Madhya Pradesh?") and failed on screens full of Hindi | for non-English lectures the board reader keeps only what it reads reliably (English text, code, numbers, web addresses); the Hindi speech still reaches the notes |
-| One broken model reply failed a whole lecture | passing errors are retried; a frame that still can't be read is skipped and logged |
 
-## Testing
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-.\.venv\Scripts\python.exe tools\evaluate.py --job output\photosynthesis
-```
-
-`tools/evaluate.py` scores the chat agent with Strands Evals. Its built-in
-cases use the sample lecture from `tools/make_sample_lecture.py`, a 65-second
-generated lecture whose every word and slide time is known; pass
-`--cases cases.json` for your own questions.
-
-Checked without AWS: slide detection, the transcript parser (both Transcribe
-formats), the quiz checks on hand-made cases (exact quote, near match,
-invented quote, paraphrase, wrong line, answer not an option, the same fact
-reworded), the steering decisions, citation and code cleanup, and the
-Transcribe client against stubbed AWS responses (it deletes the audio and the
-job on success and on failure).
 
 ## Cost, limits and safety
 
@@ -375,43 +328,8 @@ runs; `deploy/teardown.py --yes` removes it.
   the captions are read automatically.
 - Search reads the whole table; fine for a class, not for a large library.
 
-**Safety.**
 
-- The YouTube key lives in `.env` (git-ignored) locally and in SSM Parameter
-  Store on the server, and is sent to Google in a request header, never in a
-  URL.
-- The app pins one AWS account and never prints keys.
-- The progress log on the page hides the bucket name, which contains the
-  account number.
-- Locally the server listens on 127.0.0.1 only. The public demo is open to
-  everyone; set `LECTURE_DEMO_PASSCODE` to lock adding lectures and cap the
-  chat.
 
-## Project layout
-
-```
-lecture_agent/
-  web.py           web app: pages, uploads, YouTube links, job queue, chat API, search
-  pipeline.py      the five steps: listen, look, notes, quiz, store
-  agents.py        board reader, note writer and judge agents
-  quiz_agent.py    the quiz agent and check_question
-  chat.py          the Ask chat agent and citation/code cleanup
-  tools.py         the lecture tools the agents use
-  guards.py        steering (QuizCompletion, CitationCheck) and hooks (BudgetHook, TraceHook)
-  checker.py       code checks: quotes, citations, duplicates, coverage
-  transcribe.py    Amazon Transcribe client (upload, run, clean up)
-  translate.py     Amazon Translate, line by line with times kept
-  youtube.py       licence check, captions, pasted transcripts, Creative Commons download
-  db.py            Amazon DynamoDB storage and search
-  media.py         frames, slide-change detection, audio
-  transcript.py    timed transcript lines
-  render.py, pdf.py  Show notes page and PDF
-  config.py        AWS session, model and settings
-  web_static/      HTML, CSS and JavaScript (no framework)
-deploy/            EC2 deploy, HTTPS, update and teardown scripts
-docs/              article draft, demo script, submission checklist, architecture diagram
-tools/             evaluation and the sample lecture generator
-```
 
 ## Credits
 
