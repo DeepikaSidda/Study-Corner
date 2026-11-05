@@ -59,7 +59,8 @@ try:
     print("deleted role study-corner-server")
 except iam.exceptions.NoSuchEntityException:
     pass
-for name in ("/study-corner/youtube-api-key", "/study-corner/demo-passcode"):
+for name in ("/study-corner/youtube-api-key", "/study-corner/demo-passcode",
+             "/study-corner/webshare-username", "/study-corner/webshare-password"):
     try:
         ssm.delete_parameter(Name=name)
     except ssm.exceptions.ParameterNotFound:

@@ -284,6 +284,7 @@ demo runs:
 | `https.py` | opens port 443 and puts Caddy in front of the app with a free certificate for `<ip-with-dashes>.sslip.io` ([sslip.io](https://sslip.io) turns the IP into a name); http redirects to https |
 | `update.py` | ships the latest commit to the server and restarts it |
 | `remote.py "<command>"` | runs a command on the server through AWS Systems Manager |
+| `proxy.py` | optional: stores a [Webshare](https://www.webshare.io) residential proxy login in SSM so the server can read YouTube captions (YouTube blocks them from AWS); `--off` removes it |
 | `teardown.py --yes` | deletes the server, security group, role, parameters and S3 package (keeps DynamoDB) |
 
 No key or password is stored in the code, the package or the server's
@@ -325,8 +326,9 @@ runs; `deploy/teardown.py --yes` removes it.
 - Standard-licence YouTube videos don't get a Board tab, because the video
   is never downloaded.
 - YouTube blocks caption requests from AWS servers, so on the live demo,
-  standard-licence links ask for a pasted transcript. On your own computer
-  the captions are read automatically.
+  standard-licence links ask for a pasted transcript unless a residential
+  proxy is set with `deploy/proxy.py`. On your own computer the captions are
+  read automatically.
 - Search reads the whole table; fine for a class, not for a large library.
 
 
