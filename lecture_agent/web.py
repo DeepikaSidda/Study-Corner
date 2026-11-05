@@ -239,8 +239,22 @@ def _backfill() -> None:
 
 
 # --------------------------------------------------------------------- pages
+def _asset_version() -> str:
+    """Changes whenever any script or style changes, so browsers never use an old copy."""
+    import hashlib
+
+    h = hashlib.sha1()
+    for n in ("style.css", "job.js", "app.js", "notes.js"):
+        h.update((STATIC / n).read_bytes())
+    return h.hexdigest()[:10]
+
+
+ASSET_VERSION = _asset_version()
+
+
 def _page(name: str, **values: str) -> HTMLResponse:
     html = (STATIC / name).read_text(encoding="utf-8")
+    html = re.sub(r'(/static/(?:style\.css|job\.js|app\.js|notes\.js))(?=["\'])', rf"\1?v={ASSET_VERSION}", html)
     for key, value in values.items():
         html = html.replace("{{" + key + "}}", value)
     return HTMLResponse(html)
@@ -702,7 +716,9 @@ async def static(request: Request) -> Response:
     name = request.path_params["name"]
     if name not in ("style.css", "job.js", "app.js", "notes.js"):
         return Response(status_code=404)
-    return FileResponse(STATIC / name)
+    # Pages link these with ?v=<version>, so a new version is a new URL; the
+    # browser still checks back (no-cache) in case an old page is reopened.
+    return FileResponse(STATIC / name, headers={"Cache-Control": "no-cache"})
 
 
 routes = [
