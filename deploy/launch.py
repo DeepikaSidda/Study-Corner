@@ -85,7 +85,7 @@ set -euo pipefail
 get() {{ aws ssm get-parameter --region {REGION} --with-decryption --name "$1" --query Parameter.Value --output text; }}
 umask 077
 printf 'YOUTUBE_API_KEY=%s\\n' "$(get /study-corner/youtube-api-key)" > /opt/study-corner/app/.env
-export LECTURE_DEMO_PASSCODE="$(get /study-corner/demo-passcode)"
+if [ "${{STUDY_CORNER_DEMO:-0}}" = "1" ]; then export LECTURE_DEMO_PASSCODE="$(get /study-corner/demo-passcode)"; fi
 export LECTURE_AWS_REGION={REGION}
 exec /opt/study-corner/venv/bin/python -X utf8 -m lecture_agent.web --host 0.0.0.0 --port 80
 EOF

@@ -22,6 +22,16 @@ DynamoDB and Amazon S3.
 | **Agents** | Board reader, note writer, quiz agent (tool loop), judge (agent as a tool), chat agent: all Strands |
 | **Stored in** | Amazon DynamoDB: lectures, notes, quiz, transcript lines, board readings; searchable from the home page |
 
+### Live demo
+
+**<http://54.225.36.174>** (Amazon EC2, us-east-1)
+
+Everything is open: upload a video, paste a YouTube link, or open the
+finished lectures (notes, quiz, board, chat, Show notes, PDF and search).
+YouTube blocks caption requests from AWS servers, so on the live site
+standard-licence YouTube links ask for a pasted transcript; this works
+automatically when you run it on your own computer.
+
 ### Quick start
 
 ```powershell
@@ -267,6 +277,28 @@ Settings: `LECTURE_DDB_TABLE` (table name), `LECTURE_DDB=off` (run without
 DynamoDB). The AWS user needs `dynamodb:CreateTable`, `DescribeTable`,
 `Query`, `Scan`, `PutItem`, `UpdateItem`, `DeleteItem` and
 `BatchWriteItem` on that table.
+
+### Deploying the demo server (EC2)
+
+`deploy/` puts Study Corner on one Amazon EC2 server in demo mode:
+
+| Script | Does |
+|---|---|
+| `deploy/check_access.py` | checks your AWS user can create everything (dry run, creates nothing) |
+| `deploy/package.py` | uploads the committed code and the finished lectures to S3; stores the YouTube key and a demo passcode in SSM Parameter Store as SecureStrings |
+| `deploy/launch.py` | creates an IAM role with only the permissions the app needs, a security group open on port 80 only (no SSH), and a t3.small Amazon Linux 2023 server that installs and runs the app as a systemd service |
+| `deploy/update.py` | ships the latest commit to the server and restarts it |
+| `deploy/remote.py "<cmd>"` | runs a command on the server through AWS Systems Manager |
+| `deploy/passcode.py` | prints the demo passcode |
+| `deploy/teardown.py --yes` | deletes the server, security group, role, parameters and S3 package (keeps DynamoDB) |
+
+The live server runs fully open. An optional **demo mode** locks adding
+lectures behind a passcode and caps chat: set `LECTURE_DEMO_PASSCODE` (or
+`STUDY_CORNER_DEMO=1` in the server's service) and, optionally,
+`LECTURE_CHAT_PER_VISITOR_PER_DAY` (20) and `LECTURE_CHAT_PER_DAY` (200). No
+key or passcode is in the code, the package or the server's user data. Cost:
+about $15 a month for the t3.small, plus its public IP and disk; stop it with
+`teardown.py --yes`.
 
 ### Uploads in Hindi, Tamil or Telugu
 
