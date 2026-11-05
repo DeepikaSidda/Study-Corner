@@ -2,383 +2,249 @@
 
 **Watch less. Learn more.**
 
-Study Corner turns a recorded lecture, uploaded or pasted as a YouTube link,
-into **a summary, full notes, key terms, a checked quiz and a chat that
-answers only from what the teacher said**. Every point links to the second of
-the video where it was said. Lectures in Hindi, Tamil or Telugu come out as
-English notes.
+Study Corner turns any lecture video into notes a student can trust: a
+summary, full notes, key terms, what was on the board, a checked quiz, and a
+chat that answers only from what the teacher said. Every point links to the
+second of the video where it was said.
 
-Built with the [Strands Agents SDK](https://strandsagents.com) on AWS:
-Amazon Bedrock (Nova Pro), Amazon Transcribe, Amazon Translate, Amazon
-DynamoDB and Amazon S3.
+**Live demo: <https://54-225-36-174.sslip.io>**
 
-### At a glance
+Built with the [Strands Agents SDK](https://strandsagents.com) on AWS: Amazon
+Bedrock (Nova Pro), Amazon Transcribe, Amazon Translate, Amazon DynamoDB and
+Amazon S3.
 
-| | |
+---
+
+## Contents
+
+1. [The problem](#the-problem)
+2. [The idea](#the-idea)
+3. [What makes it different](#what-makes-it-different)
+4. [What it does](#what-it-does)
+5. [How it works](#how-it-works)
+6. [Run it yourself](#run-it-yourself)
+7. [Deploy it on AWS](#deploy-it-on-aws)
+8. [Results on real lectures](#results-on-real-lectures)
+9. [Testing](#testing)
+10. [Cost, limits and safety](#cost-limits-and-safety)
+11. [Project layout](#project-layout)
+12. [Credits](#credits)
+
+---
+
+## The problem
+
+Every student misses a class sometimes: work, illness, family, a long trip to
+college, or a lecture in a language they are still learning. The recording
+exists, but it is an hour long and the exam is on Friday.
+
+AI tools can summarise a video, but a student can't tell whether the summary
+is right. A wrong summary is worse than none. In a quiz it is worse still: a
+wrong "correct answer" teaches the wrong thing, and the student has no way to
+check.
+
+## The idea
+
+Study Corner makes notes from a lecture with one rule: **every answer must be
+traceable to the moment in the video where the teacher said it, and code,
+not the AI model, decides whether it is.**
+
+The student adds a lecture (a file or a YouTube link). Five AI agents read
+the transcript and the slides and write the notes and quiz. Before anything
+reaches the student, plain code checks the agents' work against the
+transcript: quotes must really be in the cited lines, times must be times the
+tools actually returned, and code shown in a chat answer must have been on
+screen.
+
+## What makes it different
+
+| A typical AI summariser | Study Corner |
 |---|---|
-| **In** | A video or audio file, or any YouTube link |
-| **Out** | Summary and key points · full notes in chapters · key terms · what was on the board · a quiz where every answer is proven by a quote · "Ask the lecture" chat · Show notes page · PDF |
-| **Trust** | Code checks every quiz quote against the transcript before a judge agent approves it; chat answers may only cite times the tools actually returned, and may not show code that wasn't on screen |
-| **Agents** | Board reader, note writer, quiz agent (tool loop), judge (agent as a tool), chat agent: all Strands |
-| **Stored in** | Amazon DynamoDB: lectures, notes, quiz, transcript lines, board readings; searchable from the home page |
+| Gives a summary you have to trust | Every key point, chapter and chat answer has a ▶ time; click it and the video jumps there |
+| Quiz answers may be made up | Each quiz answer carries a quote from the teacher. Code checks the quote is in the transcript, then a separate **judge agent** checks it proves the answer. Failed questions are rewritten |
+| Chat answers from general knowledge | The chat answers **only** from this lecture, cites times, and refuses off-topic questions ("Who won the cricket world cup?" is refused) |
+| Listens only | Also **reads the board and slides**, including code on screen |
+| English only | Hindi, Tamil and Telugu lectures become English notes; Amazon Translate keeps every line's time |
+| Downloads any video | Checks the YouTube licence first. Creative Commons videos are downloaded; all others are **never downloaded**: they play in YouTube's own player and the notes come from the captions |
+| Hides its mistakes | A **Quality** tab shows how much of the lecture the notes cover and how many quiz questions were rejected and why |
 
-### Live demo
+## What it does
 
-**<https://54-225-36-174.sslip.io>** (Amazon EC2, us-east-1, HTTPS by Caddy + Let's Encrypt)
+For every lecture:
 
-Everything is open: upload a video, paste a YouTube link, or open the
-finished lectures (notes, quiz, board, chat, Show notes, PDF and search).
-YouTube blocks caption requests from AWS servers, so on the live site
-standard-licence YouTube links ask for a pasted transcript; this works
-automatically when you run it on your own computer.
+- **Summary and key points**, each with a ▶ time
+- **Full notes** in chapters, with a timeline under the video
+- **Key terms** and worked examples, when the teacher gave them
+- **Board**: every new slide or board, with its text and code
+- **Quiz**: multiple choice and short answer. A wrong answer shows the
+  teacher's own words and "Rewatch from 01:30". The right answer is spread
+  across A, B, C and D
+- **Ask the lecture**: a chat that answers only from the lecture, cites
+  times, remembers the conversation (follow-ups work), and refuses anything
+  else
+- **Show notes**: the whole lecture as one clean page with a contents list,
+  copy and print
+- **Download PDF**: notes, then the quiz, then the answer key
+- **Quality**: coverage, checks passed, questions rewritten
+- **Search** across every lecture from the home page, linking to the moment
+  each word was said
 
-### Quick start
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-$env:LECTURE_AWS_PROFILE = "my-profile"
-.\.venv\Scripts\python.exe -m lecture_agent.web       # http://127.0.0.1:8000
-```
-
-For YouTube links, put `YOUTUBE_API_KEY=...` in a `.env` file (git-ignored).
-Details are in [Setup](#setup) and [Web app](#web-app-upload-a-recorded-lecture).
-
-### Three ways in
+Three ways to add a lecture:
 
 | Input | How the words are found | Board and slides |
 |---|---|---|
-| Upload a file | Amazon Transcribe (language detected; non-English translated with Amazon Translate) | read by the board reader agent |
-| YouTube link, Creative Commons | downloaded, then the same as an upload | read |
-| Any other YouTube link | never downloaded: plays in YouTube's player; notes from YouTube's captions, translated if needed, or a pasted transcript | not read |
+| **Upload** a video or audio file (MP4, MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB) | Amazon Transcribe, which also detects the language. Non-English speech is translated with Amazon Translate | read |
+| **YouTube link, Creative Commons** | downloaded at up to 720p, then the same as an upload | read |
+| **Any other YouTube link** | never downloaded. Plays in YouTube's player; notes from YouTube's captions (translated if needed). If YouTube won't share the captions, the student pastes the transcript from "Show transcript" | not read |
 
-### Architecture
-
-![Study Corner architecture: the student adds a lecture; Amazon Transcribe, Amazon Translate or YouTube captions give the timed words; five Strands agents run on Amazon Bedrock; everything is stored in Amazon DynamoDB](docs/architecture.png)
-
-Drawn with the [`diagrams`](https://diagrams.mingrammer.com) library: `python docs/architecture.py`.
-
-## Who it is for
-
-Students who miss lectures because they work, care for family or travel far
-to school, and students taught in a language they are still learning. A
-missed hour of video becomes notes they can read in a few minutes, and a quiz
-tells them which part to rewatch.
+The page also has dark and light mode, works on phones, and has keyboard
+shortcuts: `1`–`7` switch tabs, `K` plays or pauses, `/` opens Ask.
 
 ## How it works
 
+![Study Corner architecture: the student adds a lecture; Amazon Transcribe, Amazon Translate or YouTube captions give the timed words; five Strands agents run on Amazon Bedrock; everything is stored in Amazon DynamoDB](docs/architecture.png)
+
 ```
-lecture.mp4
+lecture (file or YouTube link)
   │
-  ├─ listen ─ audio ─► Amazon Transcribe ─► timestamped lines  S1, S2, S3 …
+  ├─ 1. listen ── Amazon Transcribe (language detected) ─► timed lines S1, S2, S3 …
+  │               or YouTube captions, for videos that may not be downloaded
+  │               ─► Amazon Translate, if the lecture isn't in English (times kept)
   │
-  ├─ look ── frames ─► slide-change detection (code) ─► board reader agent (vision)
+  ├─ 2. look ──── frames ─► slide-change detection (code) ─► BOARD READER agent (vision)
   │
-  ├─ notes ─ note writer agent ─► citations checked in code ─► coverage measured
+  ├─ 3. notes ─── NOTE WRITER agent ─► citations checked in code ─► coverage measured
   │
-  ├─ quiz ── QUIZ AGENT (tool loop)
-  │            tools: list_sections · read_transcript · search_transcript · check_question
-  │                                                                        │
-  │            check_question = code checks ─► duplicate check ─► JUDGE AGENT
-  │                             (quote really in the cited lines?)   (agent used as a tool)
-  │            steering: may not stop until the quiz is full
-  │            hooks: per-tool and model-call budget · Limits: turns and tokens
+  ├─ 4. quiz ──── QUIZ AGENT (tool loop)
+  │                 tools: list_sections · read_transcript · search_transcript · check_question
+  │                 check_question = code checks ─► duplicate check ─► JUDGE agent (agent as a tool)
+  │                 steering: may not stop until the quiz is full
   │
-  └─ render ─► notes.md + lecture.json
-
-then, in the web app:
-
-  ASK THE LECTURE ─ chat agent with the same lecture tools
-                    steering: every [mm:ss] cited must be a time a tool showed it
-                    session manager: each student's conversation is saved
+  ├─ 5. store ─── Amazon DynamoDB: lecture, notes, quiz, transcript lines, board
+  │
+  └─ then, on the page:
+     ASK THE LECTURE ─ CHAT agent with the same lecture tools
+                       steering: every [mm:ss] must be a time a tool returned,
+                       and code may only be shown if it was on screen
+                       session manager: each student's conversation is saved
 ```
 
-The order of the main steps is fixed in Python, because it is known in
-advance. Inside the quiz and chat steps, the agents decide what to read and
-when; deterministic code decides what they are allowed to keep.
+The order of the five steps is fixed in Python, because it never changes.
+Inside the quiz and the chat, the agents decide what to read and when; code
+decides what they are allowed to keep.
 
-## How it uses Strands
+### How it uses Strands Agents
 
 | Strands feature | Where | What it does here |
 |---|---|---|
-| `Agent` + structured output | `agents.py` | board reader (vision), note writer and judge each return a fixed schema |
+| `Agent` + structured output | `agents.py` | the board reader, note writer and judge each return a fixed schema |
+| `BedrockModel` | `config.py` | every agent runs on Amazon Bedrock (Nova Pro) on one pinned AWS account |
 | `@tool` | `tools.py`, `quiz_agent.py` | `search_transcript`, `read_transcript`, `list_sections`, `read_board`, `check_question`, all bound to one lecture |
-| Agent as a tool | `check_question` | calls the judge agent, so the quiz agent cannot mark its own homework |
-| Hooks | `guards.py` `BudgetHook` | caps calls per tool and model calls per request; a cancelled call tells the agent why |
-| Hooks | `guards.py` `TraceHook` | records every tool call, shown in the UI and the quality report |
-| Steering (`steer_after_model`) | `QuizCompletion` | blocks the quiz agent from finishing before enough questions have passed |
-| Steering (`steer_after_model`) | `CitationCheck` | rejects a chat answer that cites a time no tool showed the agent, or a range it cannot verify |
+| Agent as a tool | `check_question` | calls the judge agent, so the quiz agent can't approve its own questions |
+| Steering | `guards.py` `QuizCompletion` | keeps the quiz agent working until enough questions have passed |
+| Steering | `guards.py` `CitationCheck` | sends back chat answers that cite a time no tool returned, a range it can't verify, or code that wasn't on screen |
+| Hooks | `guards.py` `BudgetHook`, `TraceHook` | cap calls per tool and per request; record every tool call for the Quality tab |
 | `Limits` | quiz and chat agents | hard ceiling on turns and tokens per run |
-| `FileSessionManager` | `chat.py` | saves each student's conversation; follow-ups work after a restart |
-| `SlidingWindowConversationManager` | `chat.py` | keeps long chats inside the context window |
+| `FileSessionManager` | `chat.py` | saves each student's chat, so follow-ups work after a restart |
+| `SlidingWindowConversationManager` | `chat.py` | keeps long chats within the model's context |
 | Strands Evals | `tools/evaluate.py` | `OutputEvaluator` and `TrajectoryEvaluator` score the chat agent |
 
-## Grounding: what code checks
+### What code checks
 
-- **Notes cite transcript line numbers.** Citations to lines that don't exist
-  are removed. A key point, term or example with no valid source is dropped.
-- **Every quiz question carries an evidence quote.** `check_question` confirms
-  in code that the quote is in the cited lines (exact, or a near match
-  tolerating a dropped word, never a paraphrase), that a multiple-choice answer
-  is one of the options, and that the question does not test a fact already
-  used. Only then does the judge agent check the lines prove the answer. The
-  quiz agent sees every failure reason and fixes the question or picks another
-  fact.
-- **Chat citations are verified.** Each `[03:14]` must be the start time of a
-  transcript line, a board time or a section start that a tool returned in that
-  request. Steering sends the agent back up to twice; anything still
-  unverifiable is removed before the student sees it.
+- **Notes cite transcript lines.** Citations to lines that don't exist are
+  removed; a key point or term with no valid source is dropped.
+- **Every quiz question carries an evidence quote.** `check_question`
+  confirms in code that the quote is in the cited lines (exact, or a near
+  match that tolerates a dropped word, never a paraphrase), that a
+  multiple-choice answer is one of the options, and that the question doesn't
+  test a fact already used. Only then does the judge agent decide whether the
+  lines prove the answer. The answer key always shows the transcript's
+  sentence, never the model's version of it.
+- **Chat citations are verified.** Each `[03:14]` must be a time a tool
+  returned in that request. Steering sends the agent back up to twice;
+  anything still unverifiable is removed, with the words that led up to it,
+  before the student sees it and before it is saved to the chat history.
+- **Chat code is verified.** Code in an answer must match what the board
+  reader saw on screen; otherwise the sentence is removed.
 
-## What you get
+### Where data is stored
 
-`output/<lecture>/notes.md`:
+| Store | Holds |
+|---|---|
+| **Amazon DynamoDB** table `study-corner-lectures` (on-demand) | per lecture: details (`META`), notes (`NOTES`), one item per quiz question (`QUIZ#001`…), transcript line (`LINE#00001`…) and board reading (`BOARD#00001`…); an `INDEX` partition lists lectures newest first. The pages and search read from it |
+| **Lecture folder** `output/web/<id>/` | the video, frame pictures, PDF and chat sessions (large files; the table stores the path) |
+| **Amazon S3** | the audio, only for the minutes Transcribe needs it, then deleted |
 
-- Summary
-- Key points, each with ▶ the time it was said
-- Full notes, section by section, in lecture order
-- Key terms and worked examples (when the teacher gave them)
-- What was on the board, read from the video
-- Quiz, then an answer key with the teacher's own words and "rewatch from 03:14"
-- A quality report: coverage, checks passed, questions rewritten or dropped
+## Run it yourself
 
-`output/<lecture>/lecture.json` contains the same data for other tools. In the
-web app, use **Show notes** or **Download PDF** instead (see below).
+### What you need
 
-## Setup
+- **Python 3.10 or newer.** ffmpeg comes with the `imageio-ffmpeg` package.
+- **An AWS account** in `us-east-1` with access to Amazon Bedrock (model
+  `us.amazon.nova-pro-v1:0`, which needs no Marketplace subscription), Amazon
+  Transcribe, Amazon Translate, Amazon DynamoDB and Amazon S3. The S3 bucket
+  and the DynamoDB table are created on first use.
+- **Optional, for YouTube links:** a YouTube Data API v3 key, and Node.js
+  (yt-dlp needs a JavaScript runtime to download Creative Commons videos).
 
-Python 3.10+. ffmpeg comes bundled through `imageio-ffmpeg`.
+### 1. Install
 
 ```powershell
+git clone <this repository's URL> study-corner
+cd study-corner
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 ```
 
-AWS needs Bedrock (model `us.amazon.nova-pro-v1:0` by default), Transcribe
-and S3 in `us-east-1`.
+On macOS or Linux use `.venv/bin/python` instead of `.\.venv\Scripts\python.exe`.
+
+### 2. Point it at your AWS account
 
 ```powershell
-$env:LECTURE_AWS_PROFILE = "my-profile"   # recommended: pins the account
-```
-
-Set a profile explicitly. Without one, boto3 uses whatever credentials are
-active, and an IDE may have exported keys for a different account. The CLI
-prints the account it found and **asks before making any paid call**.
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `LECTURE_AWS_PROFILE` | none | named AWS profile to use |
-| `LECTURE_AWS_REGION` | `us-east-1` | region |
-| `LECTURE_MODEL_ID` | `us.amazon.nova-pro-v1:0` | Bedrock model; must accept images |
-| `LECTURE_MAX_TOKENS` | `8000` | output limit per model call |
-| `LECTURE_S3_BUCKET` | `lecture-notes-agent-<account>-<region>` | where audio is uploaded for Transcribe; created if missing |
-
-## Web app: upload a recorded lecture
-
-```powershell
+aws configure --profile my-profile          # if you haven't set up credentials yet
 $env:LECTURE_AWS_PROFILE = "my-profile"
-.\.venv\Scripts\python.exe -m lecture_agent.web
 ```
 
-Open <http://127.0.0.1:8000>, choose or drag in a video or audio file (MP4,
-MOV, WEBM, MKV, MP3, WAV, M4A, up to 2 GB), choose how many quiz questions you
-want, and press **Make my notes**. The web app is for English lectures: it
-transcribes English and writes the notes, quiz and chat in English. (The
-command line still has `--language` and `--notes-language`.) Each upload makes paid Transcribe and Bedrock calls on
-the AWS account the server prints when it starts.
+Setting a profile pins the account. Without one, boto3 uses whatever
+credentials are active, and an IDE may have exported keys for a different
+account. The server prints the account it uses when it starts.
 
-While a job runs, the page shows each step with its time, a count of verified
-quiz questions, and a live activity feed. When it finishes, the video sits
-next to a chapter list and a timeline, with the notes in tabs: Summary and key
-points, Full notes, Key terms, Board (each slide image with its text), an
-interactive Quiz, **Ask**, and a Quality report. Every ▶ time jumps the video
-to that moment, and a wrong quiz answer offers "Rewatch from 00:40". Keys:
-`1`–`7` switch tabs, `K` plays or pauses, `/` jumps to Ask. The moon/sun
-button switches between dark and light mode, and the choice is remembered.
+### 3. Add the YouTube key (optional)
 
-**Show notes** (next to the title) opens the whole set of notes and the quiz as
-one readable page with a contents list, and buttons to copy all the text or
-print it. **Download PDF** gives the same content as a PDF: notes first, then
-the quiz on its own page, then the answer key. The PDF is built the first time
-it is asked for and reused after that.
-
-Models nearly always put the right answer first, so the quiz moves it to a
-different letter in each question (the order is fixed per quiz).
-
-**Ask** is a chat that answers only from this lecture: "where does carbon
-dioxide get in?" → "through tiny holes called stomata ▶ 00:18". It shows which
-tools it used, refuses questions the lecture doesn't cover, and remembers the
-conversation, so "and where does the water come from?" works. Each browser
-gets its own conversation; add `?student=<id>` to the page address to reopen
-one on another device. Every question is a paid model call.
-
-Jobs run one at a time so uploads queue instead of multiplying the spend.
-Each job is kept in `output/web/<job id>/` and stays listed after a restart.
-
-### From a YouTube link
-
-The **YouTube link** tab takes a video address instead of a file. As you
-paste, Study Corner looks the video up with the YouTube Data API and shows its
-title, channel, length and licence. Only videos the creator published under
-YouTube's **Creative Commons (CC BY)** licence are accepted, because that
-licence lets anyone reuse the video. Standard-licence videos are refused with
-the reason, and you can upload your own copy instead if you have the right
-to. The licence is checked again from the video page just before download.
-Live streams, videos over 120 minutes, and videos whose creator set a spoken
-language other than English are refused too.
-
-The video is downloaded at up to 720p with [yt-dlp](https://github.com/yt-dlp/yt-dlp),
-then goes through the same steps as an upload. Every output (the lecture
-page, Show notes and the PDF) credits the title, the channel, a link and the
-licence. Pasting a link that was already made opens the existing notes, so
-nothing is charged twice.
-
-It needs a YouTube Data API v3 key in a `.env` file in the project folder
-(git-ignored):
+Create a file named `.env` in the project folder. It is git-ignored, so it
+never reaches GitHub:
 
 ```
 YOUTUBE_API_KEY=your-key
 ```
 
-Each lookup uses 1 unit of the free 10,000-unit daily quota. The key is sent
-in a request header, never in a URL, and is not shown in the page. Node.js
-(or Deno) must be installed: yt-dlp needs a JavaScript runtime for YouTube.
+Without it, everything except YouTube links works.
 
-Tested on ["Learn Python: Identifiers and Keywords (Lesson 2)"](https://www.youtube.com/watch?v=3tp32DBXE1g)
-by Indently (CC BY, 4 min 4 s): 7.4 MB downloaded in about 12 s, then 37
-transcript lines, 7 screens of code read, 4 chapters, 10 key points, 100% of
-the lesson cited, and 8 of 8 quiz questions verified.
+### 4. Start the web app
 
-### Database: Amazon DynamoDB
+```powershell
+.\.venv\Scripts\python.exe -m lecture_agent.web
+```
 
-Every lecture is stored in one DynamoDB table (`study-corner-lectures`,
-on-demand billing, created on first start). Each lecture is one partition:
+Open <http://127.0.0.1:8000>.
 
-| Item (`sk`) | Holds |
-|---|---|
-| `META` | title, source (upload or YouTube), video link, channel, licence, length, transcript source, status, counts, folder |
-| `NOTES` | summary, key points, sections, key terms, worked examples, quality metrics |
-| `QUIZ#001`… | one item per quiz question: options, answer, explanation, the teacher's quote |
-| `LINE#00001`… | one item per transcript line with its start and end time |
-| `BOARD#00001`… | one item per board or slide reading |
+### 5. Use it
 
-An `INDEX` partition lists every lecture newest first with one Query. A
-finished lecture is written by the worker; lectures made before the table
-existed are copied in when the server starts. The lecture page, Show notes
-and the PDF read from DynamoDB, with the local `lecture.json` as a fallback,
-and a database problem never fails a lecture. Videos, frame pictures and
-PDFs stay in the lecture folder (the table stores its path).
+1. Drop a video on **Upload a video**, or paste a link into **YouTube link**.
+   For a link, the page shows its title, length and how it will be handled
+   before anything is charged.
+2. Press **Make my notes**. The page shows each step live: listening,
+   reading the board, writing notes, building the quiz (with a count of
+   verified questions).
+3. When it's done, use the tabs. Click any ▶ time to jump the video.
+4. Use **Show notes** or **Download PDF** to keep the notes.
+5. Use the search box under **Your lectures** to find a word in any lecture.
 
-**Search** on the home page finds every lecture that mentions a word in its
-transcript, board or title, and links to the moment it was said
-(`/jobs/<id>?t=<seconds>`). It uses a filtered Scan, which is fine for a
-class's lectures; a large library would move it to OpenSearch.
+Lectures are processed one at a time, so uploads queue instead of
+multiplying the cost. Pasting a YouTube link that was already made opens the
+existing notes.
 
-Settings: `LECTURE_DDB_TABLE` (table name), `LECTURE_DDB=off` (run without
-DynamoDB). The AWS user needs `dynamodb:CreateTable`, `DescribeTable`,
-`Query`, `Scan`, `PutItem`, `UpdateItem`, `DeleteItem` and
-`BatchWriteItem` on that table.
-
-### Deploying the demo server (EC2)
-
-`deploy/` puts Study Corner on one Amazon EC2 server in demo mode:
-
-| Script | Does |
-|---|---|
-| `deploy/check_access.py` | checks your AWS user can create everything (dry run, creates nothing) |
-| `deploy/package.py` | uploads the committed code and the finished lectures to S3; stores the YouTube key and a demo passcode in SSM Parameter Store as SecureStrings |
-| `deploy/launch.py` | creates an IAM role with only the permissions the app needs, a security group open on port 80 only (no SSH), and a t3.small Amazon Linux 2023 server that installs and runs the app as a systemd service |
-| `deploy/https.py` | adds HTTPS: opens port 443 and puts Caddy in front of the app with a free Let's Encrypt certificate for `<ip-with-dashes>.sslip.io`; http redirects to https |
-| `deploy/update.py` | ships the latest commit to the server and restarts it |
-| `deploy/remote.py "<cmd>"` | runs a command on the server through AWS Systems Manager |
-| `deploy/passcode.py` | prints the demo passcode |
-| `deploy/teardown.py --yes` | deletes the server, security group, role, parameters and S3 package (keeps DynamoDB) |
-
-The live server runs fully open. An optional **demo mode** locks adding
-lectures behind a passcode and caps chat: set `LECTURE_DEMO_PASSCODE` (or
-`STUDY_CORNER_DEMO=1` in the server's service) and, optionally,
-`LECTURE_CHAT_PER_VISITOR_PER_DAY` (20) and `LECTURE_CHAT_PER_DAY` (200). No
-key or passcode is in the code, the package or the server's user data. Cost:
-about $15 a month for the t3.small, plus its public IP and disk; stop it with
-`teardown.py --yes`.
-
-### Uploads in Hindi, Tamil or Telugu
-
-Uploads no longer have to be in English. Amazon Transcribe identifies the
-spoken language (English US/India/UK, Hindi, Tamil or Telugu; set
-`LECTURE_LANGUAGE_OPTIONS` to change the list). A non-English lecture is
-translated to English line by line with Amazon Translate, times unchanged,
-and the original lines are kept in `segments.original.json`.
-
-Nova Pro can't read Hindi script on slides reliably: asked to translate a
-Hindi slide it invented "What is the capital of Madhya Pradesh?", and its
-structured reply failed outright on screens full of Hindi
-(`modelStreamErrorException`, about a minute per try). For non-English
-lectures the board reader now replies in plain text and keeps only the
-English letters, code, numbers and web addresses on screen; what the teacher
-says in Hindi still reaches the notes through Transcribe and Translate.
-
-Tested on ["How to contribute to Hindi Wikipedia"](https://commons.wikimedia.org/wiki/File:How_to_contribute_to_Hindi_Wikipedia.ogv)
-(Subhashish Panigrahi and Noopur Raval, CC BY-SA 3.0, 4 min 58 s): detected
-as hi-IN, 22 lines translated, 21 of 24 screens read with no failures,
-5 chapters, 91% covered, 8 of 8 quiz questions verified, in 167 s after
-transcription. An English clip still came back as en-US.
-
-### YouTube videos that may not be downloaded
-
-Most YouTube videos have the standard licence, so they are **never
-downloaded**. Instead:
-
-- The video plays from YouTube's own embedded player on the notes page.
-  Chapters, ▶ times and the `K` key control that player.
-- The notes are made from the video's **English captions**, the same timed
-  text YouTube shows under "Show transcript", read with
-  [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api)
-  (the approach used in the Smart-Podcast-Finder project). If YouTube only
-  has captions in another language, it translates them to English when it
-  can; if not, the video is refused.
-- If the only captions are in another language that YouTube can't translate
-  (common for Hindi auto-captions), each timed line is translated to English
-  with **Amazon Translate** (`lecture_agent/translate.py`). Times stay the
-  same, so chapters, ▶ links and quiz checks all work on the English lines.
-  Pasted transcripts in Hindi, Tamil, Telugu and other Indian scripts are
-  translated the same way. Tested on a 15:38 Hindi video (Prashant Kirad,
-  "Complete AI Masterclass for Students"): 122 lines, 15,810 characters
-  translated in 9 s, then 6 chapters, 99% coverage, 10 of 10 quiz questions
-  verified, and the chat answered "What does RCTO stand for?" with ▶ 04:29.
-- If YouTube doesn't share the captions, the page asks the student to paste
-  the transcript (with its times) from "Show transcript".
-- Amazon Transcribe isn't used, so it is cheaper and faster: a 5-minute video
-  took 60 s. The board and slides aren't read, so there's no Board tab.
-- The credit says the video belongs to its creator and wasn't downloaded.
-
-Tested on ["Learn Python for loops in 5 minutes!"](https://www.youtube.com/watch?v=KWgYha0clzw)
-by Bro Code (standard licence): 25 timed lines from the auto-generated
-captions, 5 chapters with their own times, 8 of 8 quiz questions verified,
-no video or audio saved.
-
-The chat then answered "How do I count backwards?" with
-`reversed(range(10, 0))`, code the teacher never showed (it loops zero times).
-The citation check now also rejects code in an answer unless the board
-reader saw it on screen, and any sentence still showing unchecked code is
-removed before the student sees it. The next answer explained it in words
-with ▶ 01:55.
-
-This lesson found two more problems, now fixed:
-
-- **Two chapters at 00:00.** Amazon Transcribe's sentence list came back as
-  13 lines for 4 minutes of unscripted speech, some 25 s long, so two chapters
-  and two key points shared one start time. Lines are now built from the
-  word timings, ending at a sentence end, or at a comma after 7 seconds, and
-  never longer than 15 seconds (37 lines for the same lesson).
-- **Typed code wasn't "a new slide".** Typing in an editor changes under 1% of
-  the screen, so only 3 of 24 frames passed the 2% change bar, and the Board
-  tab showed 2 readings. A small change now also counts once 30 seconds have
-  passed since the last kept frame: 9 frames kept, 7 with code.
-
-The server listens on 127.0.0.1 only and has no login. Don't expose it to the
-internet as it is: anyone who can reach it could run jobs on your AWS account.
-
-## Command line
+### Command line (no web page)
 
 ```powershell
 .\.venv\Scripts\python.exe -m lecture_agent lecture.mp4 --questions 10
@@ -387,132 +253,183 @@ internet as it is: anyone who can reach it could run jobs on your AWS account.
 | Option | Meaning |
 |---|---|
 | `--language en-US` | spoken language for Transcribe (`en-IN`, `hi-IN`, … or `auto`) |
-| `--notes-language English` | language to write notes and quiz in |
+| `--notes-language English` | language to write the notes and quiz in |
 | `--frame-every 10` | seconds between sampled frames |
 | `--no-board` | skip reading the board |
 | `--no-judge` | skip the judge agent; code checks still run |
 | `--transcript file.json` | use an existing Transcribe result |
-| `-y` | do not ask before using the AWS account |
+| `-y` | don't ask before using the AWS account |
 
-Transcription results are cached in the output folder, so a rerun does not pay
-for Transcribe again.
+It writes `notes.md` and `lecture.json` to `output/<lecture>/`. Transcripts
+are cached there, so a rerun doesn't pay for Transcribe again.
 
-## Sample lecture
+### Settings
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `LECTURE_AWS_PROFILE` | none | AWS profile to use |
+| `LECTURE_AWS_REGION` | `us-east-1` | region |
+| `LECTURE_MODEL_ID` | `us.amazon.nova-pro-v1:0` | Bedrock model; must accept images |
+| `LECTURE_MAX_TOKENS` | `8000` | output limit per model call |
+| `LECTURE_S3_BUCKET` | `lecture-notes-agent-<account>-<region>` | bucket for Transcribe audio |
+| `LECTURE_LANGUAGE_OPTIONS` | `en-US,en-IN,en-GB,hi-IN,ta-IN,te-IN` | languages Transcribe chooses between |
+| `LECTURE_DDB_TABLE` | `study-corner-lectures` | DynamoDB table |
+| `LECTURE_DDB` | `on` | `off` runs without DynamoDB (local files only) |
+| `LECTURE_MAX_UPLOAD_MB` | `2048` | upload size limit |
+| `LECTURE_MAX_YOUTUBE_MINUTES` | `120` | longest YouTube video accepted |
+| `YOUTUBE_API_KEY` | none | enables YouTube links (put it in `.env`) |
+| `LECTURE_DEMO_PASSCODE` | none | optional demo mode: adding lectures needs this passcode; chat capped by `LECTURE_CHAT_PER_VISITOR_PER_DAY` (20) and `LECTURE_CHAT_PER_DAY` (200) |
+
+## Deploy it on AWS
+
+`deploy/` puts Study Corner on one Amazon EC2 server, which is how the live
+demo runs:
 
 ```powershell
-.\.venv\Scripts\python.exe tools\make_sample_lecture.py
+.\.venv\Scripts\python.exe deploy\check_access.py   # can your AWS user do this? (creates nothing)
+.\.venv\Scripts\python.exe deploy\package.py        # code + lectures to S3; YouTube key to SSM Parameter Store
+.\.venv\Scripts\python.exe deploy\launch.py         # IAM role, security group, t3.small server
+.\.venv\Scripts\python.exe deploy\https.py          # HTTPS with Caddy + Let's Encrypt
 ```
 
-Builds `data/sample/photosynthesis.mp4`: a 65-second, 5-slide lecture
-narrated by the Windows built-in voice. Because every word and slide time is
-known, results can be checked against `ground_truth.json`. It also writes
-`transcript_synthetic.json`, a transcript in Transcribe's format built from the
-known narration, for testing without AWS. It is synthetic, not real
-Transcribe output.
-
-## Results on the sample lecture
-
-Real run with Amazon Transcribe and Amazon Nova Pro, checked against the known
-ground truth:
-
-| Check | Result |
+| Script | Does |
 |---|---|
-| Transcribe | 150 of 150 words heard; the only differences are numbers written as digits ("six" → "6") and US spelling |
-| Section timestamps vs real slide starts | all 5 within 0.1 s |
-| Board reading vs real slide text | 5 of 5 slides read 100% correctly, including the equation |
-| Notes coverage | 14 of 14 transcript segments cited |
-| Quiz agent, 8 questions | 8 of 8 verified from 8 checks; 5 `read_transcript` calls |
-| Quiz agent, 12 questions (more than this short lecture holds) | 12 of 12 from 15 checks: 3 repeats of an already-used fact rejected, the agent then found new facts |
-| Full run | 80 s for the 65 s lecture, including transcription |
-| Cleanup | audio deleted from S3 and Transcribe job removed after each run |
+| `check_access.py` | dry-run checks for every permission the deploy needs |
+| `package.py` | uploads the committed code and finished lectures to S3; stores the YouTube key (and a demo passcode) in SSM Parameter Store as SecureStrings |
+| `launch.py` | creates an IAM role with only what the app needs, a security group with no SSH, and an Amazon Linux 2023 server that installs the app and runs it as a systemd service |
+| `https.py` | opens port 443 and puts Caddy in front of the app with a free certificate for `<ip-with-dashes>.sslip.io` ([sslip.io](https://sslip.io) turns the IP into a name); http redirects to https |
+| `update.py` | ships the latest commit to the server and restarts it |
+| `remote.py "<command>"` | runs a command on the server through AWS Systems Manager |
+| `teardown.py --yes` | deletes the server, security group, role, parameters and S3 package (keeps DynamoDB) |
 
-### Chat agent, measured with Strands Evals
+No key or password is stored in the code, the package or the server's
+startup script; the server reads them from SSM Parameter Store when the app
+starts. Don't stop and start the server from the console: it would get a new
+IP address and the link would change.
 
-`tools/evaluate.py`: 7 student questions, each scored by `OutputEvaluator`
-(correct, grounded, cited, refuses off-topic) and `TrajectoryEvaluator` (looked
-it up first).
+## Results on real lectures
 
-| Result | Value |
+| Lecture | Way in | Result |
+|---|---|---|
+| *Exception Handling in Python* (Adam Gaweda, CSC111, CC BY 3.0), 5:07 | upload | 19 of 19 kept screens read, including code and tracebacks; 7 sections; 91% of the lecture cited; 7 verified questions from 13 checks |
+| *Learn Python: Identifiers and Keywords* (Indently, CC BY), 4:04 | YouTube, downloaded | 7.4 MB in 12 s; 7 code screens read; 100% cited; 8/8 questions |
+| *Learn Python for loops in 5 minutes!* (Bro Code, standard licence), 5:06 | YouTube captions | 60 s, nothing downloaded; 5 chapters; 8/8 questions from 11 checks |
+| *Complete AI Masterclass for Students* (Prashant Kirad, Hindi), 15:38 | YouTube Hindi captions + Amazon Translate | 15,810 characters translated in 9 s; 99% cited; 10/10 questions; "What does RCTO stand for?" answered with ▶ 04:29 |
+| *How to contribute to Hindi Wikipedia* (CC BY-SA 3.0), 4:58 | upload, Hindi speech | detected as hi-IN; 21 of 24 screens read with no failures; 5 chapters; 91% cited; 8/8 questions |
+
+Chat agent, scored with Strands Evals on 7 student questions: **14 of 14
+evaluations passed** (score 0.99). All in-scope answers had a verified ▶
+citation, both off-topic questions were refused, and every answer looked the
+lecture up first.
+
+### What real videos broke, and the fixes
+
+| Problem | Fix |
 |---|---|
-| Evaluations passed | 14 of 14, overall score 0.99 |
-| In-scope answers with a verified ▶ citation | 5 of 5 |
-| Off-topic questions refused (history, and a nearby biology topic) | 2 of 2 |
-| Answers that looked the lecture up before answering | 7 of 7 |
-| Unverifiable citations removed in this run | 0 |
+| The model reworded the teacher ("Chlorophyll traps…" for "It traps…") | the answer key shows the transcript's sentence, never the model's |
+| The right answer was always A | the answer moves to a different letter in each question (seeded, so the quiz is stable) |
+| The same fact was asked twice in different words | the duplicate check compares the evidence, not only the wording |
+| The chat cited a range `[00:11-00:37]` it couldn't verify | steering rejects any time format it can't check |
+| The chat invented code: `reversed(range(10, 0))`, which loops zero times | code in an answer must have been on screen; otherwise the sentence is removed |
+| Removing a bad time left "…which starts at." | the words leading up to a removed time go with it, in the answer and the saved history |
+| Two chapters started at 00:00: Transcribe's sentences ran up to 25 s | lines are rebuilt from word timings, 15 s at most |
+| Typed code wasn't "a new slide": a coding lesson gave 2 board readings | small screen changes count after 30 s: 7 readings for the same lesson |
+| Nova Pro invented text when reading Hindi slides ("What is the capital of Madhya Pradesh?") and failed on screens full of Hindi | for non-English lectures the board reader keeps only what it reads reliably (English text, code, numbers, web addresses); the Hindi speech still reaches the notes |
+| One broken model reply failed a whole lecture | passing errors are retried; a frame that still can't be read is skipped and logged |
 
-### Problems that real runs found, and the fixes
-
-- **Reworded "quotes".** The model quoted the teacher as saying *"Chlorophyll
-  traps the energy of sunlight"*; the teacher said *"It traps…"*. It passed as a
-  near match, so the answer key now shows the transcript sentence, never the
-  model's version.
-- **The same fact asked twice.** "What three things do plants need?" and
-  "Which is NOT a requirement?" were both proven by the same sentence. The
-  duplicate check now compares evidence, not only wording.
-- **Unverifiable citations.** The chat agent once cited a range,
-  `[00:11-00:37]`. Steering now rejects any time format it cannot check.
-- **Steering messages in the chat history.** Strands stores steering guidance
-  in the conversation as a user message, so the student's history showed
-  "You cited times without reading the lecture" as if they had typed it.
-  Guidance is now tagged and filtered out.
-
-The sample is clean, synthetic speech with typed slides. For a real recording,
-see the next section.
-
-## Demo lecture: a real Python lesson
-
-The demo uses a real recorded lesson, not a generated one:
-[“Exception Handling in Python with try-except”](https://commons.wikimedia.org/wiki/File:Exception_Handling_in_Python_with_try-except.webm)
-by Adam Gaweda (NC State University, course CSC111), licensed
-[CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). It is 5 minutes 7
-seconds: slides, then live coding in the Spyder editor, with the teacher on a
-webcam in the corner. The video is not stored in this repository; download it
-from the link above and upload it in the web app.
-
-Real run with Amazon Transcribe and Amazon Nova Pro:
-
-| Check | Result |
-|---|---|
-| Transcribe | 22 segments of natural, unscripted speech ("uh", "gonna", restarts) |
-| Board reading | 31 frames sampled, 19 kept after change detection, all 19 read, including the code and the `ZeroDivisionError` tracebacks |
-| Notes | 7 sections, 10 key points, 91% of the transcript cited |
-| Quiz agent, 8 questions | 7 verified from 13 checks: 1 failed the code check and was fixed, 5 repeats of a saved fact rejected; the agent then stopped with 7 because the lesson holds few separate facts |
-| Chat | "What does the except block do?" answered with ▶ 03:00 and ▶ 04:36; "What is the capital of France?" refused, pointing to the start of the lesson |
-| Time | transcription 51 s; then 194 s to read the screen, write the notes and build the quiz, for the 307 s lesson |
-
-Problems this real lesson found, and the fixes:
-
-- **A broken model reply stopped the whole job.** Nova once streamed an
-  invalid tool-use reply while reading a frame (`modelStreamErrorException`).
-  The single-task agents now retry such passing errors twice, and if one frame
-  still can't be read it is skipped and logged instead of failing the lecture.
-- **A dangling sentence after removing a citation.** The chat answered
-  "…which starts at [00:01]." with a time it had not looked up. Removing the
-  time left "…which starts at." The words leading up to a removed time now go
-  with it. The cleaned answer is also saved to the chat history, so reopening
-  the chat never shows the unchecked time.
-
-## Evaluate
+## Testing
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe tools\evaluate.py --job output\photosynthesis
 ```
 
-The built-in cases are for the sample lecture. For another lecture, pass
-`--cases cases.json` with your own questions and expected answers.
+`tools/evaluate.py` scores the chat agent with Strands Evals. Its built-in
+cases use the sample lecture from `tools/make_sample_lecture.py`, a 65-second
+generated lecture whose every word and slide time is known; pass
+`--cases cases.json` for your own questions.
 
-## Verified without AWS
+Checked without AWS: slide detection, the transcript parser (both Transcribe
+formats), the quiz checks on hand-made cases (exact quote, near match,
+invented quote, paraphrase, wrong line, answer not an option, the same fact
+reworded), the steering decisions, citation and code cleanup, and the
+Transcribe client against stubbed AWS responses (it deletes the audio and the
+job on success and on failure).
 
-- Slide detection finds all 5 sample slides at 2, 5 and 10 second sampling.
-- The transcript parser reproduces all 15 narration sentences exactly, from
-  both Transcribe formats.
-- The quiz checks give the expected result on hand-made cases: exact quote,
-  near match, invented quote, paraphrase, wrong segment, answer not an option,
-  and the same fact reworded.
-- Steering decisions were tested directly: the quiz agent is held back when
-  the quiz is short, and a chat answer is rejected for an invented time, a
-  range, or citing before reading.
-- The Transcribe client was checked against stubbed AWS responses: it uploads,
-  polls, downloads, and deletes the audio and the job on success and failure.
+## Cost, limits and safety
 
+**Cost.** Each lecture costs a few cents to tens of cents in Bedrock,
+Transcribe and Translate calls; a YouTube-captions lecture skips Transcribe.
+Each chat question is a fraction of a cent. DynamoDB is on-demand, so it
+costs nothing when idle. The EC2 demo server is about $15–20 a month while it
+runs; `deploy/teardown.py --yes` removes it.
+
+**Limits.**
+
+- Hindi and other non-Latin text on slides isn't shown in the Board tab;
+  what the teacher says is still in the notes.
+- Standard-licence YouTube videos don't get a Board tab, because the video
+  is never downloaded.
+- YouTube blocks caption requests from AWS servers, so on the live demo,
+  standard-licence links ask for a pasted transcript. On your own computer
+  the captions are read automatically.
+- Search reads the whole table; fine for a class, not for a large library.
+
+**Safety.**
+
+- The YouTube key lives in `.env` (git-ignored) locally and in SSM Parameter
+  Store on the server, and is sent to Google in a request header, never in a
+  URL.
+- The app pins one AWS account and never prints keys.
+- The progress log on the page hides the bucket name, which contains the
+  account number.
+- Locally the server listens on 127.0.0.1 only. The public demo is open to
+  everyone; set `LECTURE_DEMO_PASSCODE` to lock adding lectures and cap the
+  chat.
+
+## Project layout
+
+```
+lecture_agent/
+  web.py           web app: pages, uploads, YouTube links, job queue, chat API, search
+  pipeline.py      the five steps: listen, look, notes, quiz, store
+  agents.py        board reader, note writer and judge agents
+  quiz_agent.py    the quiz agent and check_question
+  chat.py          the Ask chat agent and citation/code cleanup
+  tools.py         the lecture tools the agents use
+  guards.py        steering (QuizCompletion, CitationCheck) and hooks (BudgetHook, TraceHook)
+  checker.py       code checks: quotes, citations, duplicates, coverage
+  transcribe.py    Amazon Transcribe client (upload, run, clean up)
+  translate.py     Amazon Translate, line by line with times kept
+  youtube.py       licence check, captions, pasted transcripts, Creative Commons download
+  db.py            Amazon DynamoDB storage and search
+  media.py         frames, slide-change detection, audio
+  transcript.py    timed transcript lines
+  render.py, pdf.py  Show notes page and PDF
+  config.py        AWS session, model and settings
+  web_static/      HTML, CSS and JavaScript (no framework)
+deploy/            EC2 deploy, HTTPS, update and teardown scripts
+docs/              article draft, demo script, submission checklist, architecture diagram
+tools/             evaluation and the sample lecture generator
+```
+
+## Credits
+
+Demo lectures:
+
+- [“Exception Handling in Python with try-except”](https://commons.wikimedia.org/wiki/File:Exception_Handling_in_Python_with_try-except.webm), Adam Gaweda, CC BY 3.0
+- [“Learn Python: Identifiers and Keywords (Lesson 2)”](https://www.youtube.com/watch?v=3tp32DBXE1g), Indently, CC BY
+- [“How to contribute to Hindi Wikipedia”](https://commons.wikimedia.org/wiki/File:How_to_contribute_to_Hindi_Wikipedia.ogv), Subhashish Panigrahi and Noopur Raval, CC BY-SA 3.0
+- Standard-licence videos (Bro Code, English At The Ready, Prashant Kirad) are
+  not stored or downloaded: they play from YouTube, and their notes were made
+  from YouTube's captions for testing.
+
+Libraries: [Strands Agents](https://strandsagents.com),
+[yt-dlp](https://github.com/yt-dlp/yt-dlp),
+[youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api),
+[Starlette](https://www.starlette.io), [fpdf2](https://py-pdf.github.io/fpdf2/),
+[diagrams](https://diagrams.mingrammer.com), [Caddy](https://caddyserver.com).
+
+Study Corner started in the AWS *Building AI Agents with Strands SDK*
+workshop. The tools, agents as tools, steering, hooks, sessions and evals
+from that workshop all do real work here.
