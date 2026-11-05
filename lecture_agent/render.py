@@ -10,6 +10,7 @@ from .schemas import BoardReading, LectureNotes, QuizQuestion
 from .transcript import Segment, fmt_time
 
 LETTERS = "ABCDEFGH"
+SHOW_BOARD = False  # board readings feed the notes and chat, but aren't shown on their own
 
 
 def _at(segment_ids: list[int], by_id: dict[int, Segment]) -> str:
@@ -64,13 +65,17 @@ def render_markdown(
             out += ["", f"### {ex.title} {_at(ex.segment_ids, by_id)}".rstrip(), ""]
             out += [f"{i}. {step}" for i, step in enumerate(ex.steps, start=1)]
 
-    written = [(f, r) for f, r in boards if r.has_content]
+    written = [(f, r) for f, r in boards if r.has_content] if SHOW_BOARD else []
     if written:
         out += ["", "## On the board", ""]
         for frame, reading in written:
             out.append(f"**▶ {fmt_time(frame.time)}**")
             if reading.text.strip():
                 out += [f"> {line}" for line in reading.text.strip().splitlines() if line.strip()]
+            if reading.code.strip():
+                out += ["", "```", reading.code.rstrip(), "```"]
+            if reading.output.strip():
+                out.append(f"> Output: `{reading.output.strip()}`")
             for formula in reading.formulas:
                 if formula.strip() not in reading.text:  # already shown in the text
                     out.append(f"> `{formula}`")
@@ -186,12 +191,17 @@ def render_document_html(data: dict) -> str:
             out += [f"<li>{e(step)}</li>" for step in ex["steps"]]
             out.append("</ol>")
 
-    boards = [b for b in data.get("board", []) if b.get("has_content")]
+    # Board readings feed the notes and the chat; they aren't shown on their own.
+    boards = [b for b in data.get("board", []) if b.get("has_content")] if SHOW_BOARD else []
     if boards:
         out.append('<h2 id="board">On the board</h2>')
         for b in boards:
             lines = "<br>".join(e(line.strip()) for line in b["text"].splitlines() if line.strip())
             extra = "".join(f"<br><code>{e(f)}</code>" for f in b.get("formulas", []) if f.strip() not in b["text"])
+            if (b.get("code") or "").strip():
+                extra += f'<pre class="board-code"><code>{e(b["code"].rstrip())}</code></pre>'
+            if (b.get("output") or "").strip():
+                extra += f'<br><b>Output:</b> <code>{e(b["output"].strip())}</code>'
             diagram = f'<br><i>Diagram: {e(b["diagram"])}</i>' if b.get("diagram") else ""
             out.append(f'<p class="board-text"><span class="t">{fmt_time(b["time"])}</span><br>{lines}{extra}{diagram}</p>')
 

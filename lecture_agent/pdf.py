@@ -28,6 +28,7 @@ PRIMARY = (15, 118, 110)
 SOFT = (227, 244, 241)
 LINE = (226, 232, 240)
 LETTERS = "ABCDEFGH"
+SHOW_BOARD = False
 
 _FONT_CANDIDATES = [
     (os.environ.get("LECTURE_PDF_FONT"), os.environ.get("LECTURE_PDF_FONT_BOLD")),
@@ -117,6 +118,16 @@ class NotesPDF(FPDF):
         self.multi_cell(self.epw - indent - 6, 5.6, self.text_safe(text), align="L", new_x="LMARGIN", new_y="NEXT")
         self.ln(0.8)
 
+    def code(self, value: str) -> None:
+        """Code in a light box, keeping its indentation (spaces are kept by fpdf's multi_cell)."""
+        mono = "Courier" if self.family == "Helvetica" else self.family
+        self.set_fill_color(245, 247, 250)
+        self.set_text_color(*INK)
+        self.set_font(mono, "", 9.5)
+        self.multi_cell(0, 5, self.text_safe(value.replace("\t", "    ")), fill=True, align="L",
+                        new_x="LMARGIN", new_y="NEXT", padding=(3, 4, 3, 4))
+        self.ln(1.5)
+
     def box(self, label: str, value: str) -> None:
         self.set_fill_color(*SOFT)
         self.set_font(self.family, "B", 8.5)
@@ -184,13 +195,19 @@ def build_pdf(data: dict, out_path: Path) -> Path:
                 pdf.bullet(step, marker=f"{n}.")
             pdf.ln(2)
 
-    boards = [b for b in data.get("board", []) if b.get("has_content")]
+    # Board readings feed the notes and the chat; they aren't printed on their own.
+    boards = [b for b in data.get("board", []) if b.get("has_content")] if SHOW_BOARD else []
     if boards:
         pdf.heading("On the board")
         for board in boards:
             pdf.subheading(f"At {fmt_time(board['time'])}")
             text = "\n".join(line.strip() for line in board["text"].splitlines() if line.strip())
-            pdf.para(text)
+            if text:
+                pdf.para(text)
+            if (board.get("code") or "").strip():
+                pdf.code(board["code"].rstrip())
+            if (board.get("output") or "").strip():
+                pdf.para("Output: " + board["output"].strip(), size=9.5, color=MUTED)
             for formula in board.get("formulas", []):
                 if formula.strip() not in board["text"]:
                     pdf.para(formula)

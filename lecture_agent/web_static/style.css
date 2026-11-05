@@ -548,6 +548,12 @@ details.log pre { margin: 10px 0 0; padding: 14px; border-radius: 12px; backgrou
 .board .shot:hover .ov { opacity: 1; }
 .board figcaption { padding: 14px 16px 16px; display: grid; gap: 8px; }
 .board pre { margin: 0; white-space: pre-wrap; font: .9rem/1.55 var(--font); color: var(--ink-2); }
+.board .board-words { margin: 0; white-space: pre-line; font-size: .92rem; line-height: 1.55; color: var(--ink); font-weight: 600; }
+.board pre.board-code { padding: 10px 12px; border-radius: 10px; background: #0b1220; border: 1px solid var(--line); overflow-x: auto; white-space: pre; }
+.board pre.board-code code { display: block; padding: 0; background: none; font: .82rem/1.55 var(--mono); color: #d1fae5; }
+.board .board-output { margin: 0; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: .82rem; color: var(--muted); }
+.board .board-output span { font-weight: 700; text-transform: uppercase; letter-spacing: .06em; font-size: .7rem; }
+.board .board-output code { display: inline; padding: 2px 8px; color: var(--bad); }
 .board code { display: block; padding: 8px 10px; border-radius: 9px; background: var(--surface-2); font: .84rem var(--mono); }
 
 /* quiz */
@@ -680,6 +686,8 @@ table.details td:last-child { text-align: right; font: 600 .88rem var(--mono); c
 .doc .t { font: 600 .74rem var(--mono); color: var(--primary); background: var(--primary-soft); padding: 2px 8px; border-radius: 99px; white-space: nowrap; vertical-align: 1px; }
 .doc .quote { color: var(--muted); font-size: .92rem; }
 .doc .board-text { padding: 10px 16px; border-left: 3px solid var(--line-strong); }
+.doc .board-code { margin: 8px 0 4px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); overflow-x: auto; white-space: pre; }
+.doc .board-code code { font: .85rem/1.55 var(--mono); }
 .doc .blank { color: var(--muted); }
 .doc code { font: .9rem var(--mono); }
 

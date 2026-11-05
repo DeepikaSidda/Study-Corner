@@ -1,6 +1,7 @@
 # Study Corner
 
 **Watch less. Learn more.**
+*Turn any lecture video into notes, a quiz and a chat.*
 
 Study Corner turns any lecture video into notes a student can trust: a
 summary, full notes, key terms, what was on the board, a checked quiz, and a

@@ -139,6 +139,10 @@ def lecture_tools(index: LectureIndex) -> list:
             index.shown_times.add(fmt_time(board["time"]))
             text = " / ".join(line.strip() for line in board["text"].splitlines() if line.strip())
             extra = f" | formulas: {'; '.join(board['formulas'])}" if board.get("formulas") else ""
+            if (board.get("code") or "").strip():
+                extra += " | code: " + board["code"].strip().replace("\n", " ⏎ ")
+            if (board.get("output") or "").strip():
+                extra += " | output: " + board["output"].strip()
             rows.append(f"[Board {fmt_time(board['time'])}] {text}{extra}")
         return "\n".join(rows)
 

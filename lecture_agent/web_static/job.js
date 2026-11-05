@@ -401,7 +401,9 @@ async function showResult(job) {
     ask: { label: "Ask", icon: "chat", build: () => askPane(notes) },
     quality: { label: "Quality", icon: "shield", build: () => qualityPane(m, data.quiz.length) },
   };
-  if (playsFromYouTube(job)) delete panes.board;  // no video frames, so nothing to read
+  // Slides are still read in the background (the notes and the chat use them),
+  // but the raw readings aren't shown as their own tab.
+  delete panes.board;
   const keys = Object.keys(panes);
   document.getElementById("tab-count").textContent = String(keys.length);
   const tabs = document.getElementById("tabs");
@@ -507,8 +509,10 @@ function boardPane(board) {
           el("span", { class: "ov" }, el("span", {}, icon("play"), `Play from ${fmt(b.time)}`))),
         el("figcaption", {},
           el("div", {}, jump(b.time)),
-          el("pre", {}, b.text.replace(/\n\s*\n/g, "\n").trim()),
-          b.formulas.filter(f => !b.text.includes(f)).map(f => el("code", {}, f)),
+          (b.text || "").trim() ? el("p", { class: "board-words" }, b.text.replace(/\n\s*\n/g, "\n").trim()) : null,
+          (b.code || "").trim() ? el("pre", { class: "board-code" }, el("code", {}, b.code.replace(/\s+$/, ""))) : null,
+          (b.output || "").trim() ? el("p", { class: "board-output" }, el("span", {}, "Output"), el("code", {}, b.output.trim())) : null,
+          (b.formulas || []).filter(f => !(b.text || "").includes(f)).map(f => el("code", {}, f)),
           b.diagram ? el("p", { class: "muted small", style: "margin:0" }, `Diagram: ${b.diagram}`) : null)))),
   ];
 }

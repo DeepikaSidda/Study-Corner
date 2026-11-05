@@ -13,8 +13,10 @@ from pydantic import BaseModel, Field
 
 
 class BoardReading(BaseModel):
-    has_content: bool = Field(description="False if the frame shows no board, slide or written content")
-    text: str = Field(default="", description="All readable text exactly as written, one line per line on the board")
+    has_content: bool = Field(description="False if the frame shows no teaching content (only the teacher, a desktop, an empty editor)")
+    text: str = Field(default="", description="Slide or board text a student needs: title, headings, points. One line per line. Not code, not menus, not file paths")
+    code: str = Field(default="", description="The program code being taught, exactly as written with its indentation, without line numbers or editor boilerplate")
+    output: str = Field(default="", description="Only the meaningful result of running the code: printed values or the final error line. Never a stack trace")
     formulas: list[str] = Field(default_factory=list, description="Each formula or equation, copied exactly")
     diagram: str = Field(default="", description="One sentence describing any diagram, empty if none")
 

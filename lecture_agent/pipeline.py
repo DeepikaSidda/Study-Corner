@@ -111,12 +111,19 @@ def run(
         changed = media.slide_changes(frames, threshold=change_threshold, max_frames=max_frames)
         sampled, kept = len(frames), len(changed)
         log(f"look: {sampled} frames sampled, {kept} kept after change detection")
+        last_key = None
         for frame in changed:
             # One unreadable frame should not lose the whole lecture: skip it
             # (the transcript still covers what was said) and say so.
             try:
-                boards.append((frame, agents.read_board(frame, to_english=board_to_english,
-                                                        language=spoken or "auto")))
+                reading = agents.read_board(frame, to_english=board_to_english, language=spoken or "auto")
+                # The same code shown again a few seconds later isn't a new board.
+                key = agents.board_key(reading) if reading.has_content else None
+                if key and key == last_key:
+                    reading = reading.model_copy(update={"has_content": False})
+                elif key:
+                    last_key = key
+                boards.append((frame, reading))
             except Exception as exc:  # noqa: BLE001
                 log(f"  look: skipped the frame at {fmt_time(frame.time)} ({type(exc).__name__}: {str(exc)[:80]})")
         log(f"look: {sum(1 for _, r in boards if r.has_content)} frames had board content")

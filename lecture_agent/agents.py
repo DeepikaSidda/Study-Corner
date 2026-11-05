@@ -48,13 +48,90 @@ def _ask(system_prompt: str, prompt, schema, temperature: float = 0.2, retries: 
 
 
 # --------------------------------------------------------------- board reader
-BOARD_PROMPT = """You read one frame from a recorded classroom lecture.
-Copy any text written on the board, whiteboard or slide exactly as written.
-List every formula or equation separately in `formulas`.
-If a diagram is shown, describe it in one sentence in `diagram`.
+BOARD_PROMPT = """You read one frame from a recorded lecture and write down only what a student
+needs to study from it. Copy what is shown; never add or invent anything.
+
+- text: the slide, board or whiteboard content: title, headings and points, as
+  written, one line per line.
+- code: the program code being taught, copied exactly with its indentation.
+  Leave out line numbers, and boilerplate the lesson isn't about, such as
+  "# -*- coding: utf-8 -*-", "@author", "Created on", empty docstrings.
+- output: only the meaningful result when code is run: the printed values,
+  or the final error line (for example "ZeroDivisionError: division by zero").
+- formulas: each formula or equation, copied exactly.
+- diagram: one sentence if a diagram is shown.
+
+Never copy: stack traces, file paths, "File ... line ..." lines, console
+prompts like "In [2]:" or "runfile(...)", menus, toolbars, tabs, window
+titles, the taskbar, or the webcam picture of the teacher.
 If a word cannot be read, write [unclear] instead of guessing.
-If the frame shows no written content (for example only the teacher), set
-has_content to false and leave the other fields empty."""
+If the frame has no teaching content (only the teacher, a desktop or an empty
+editor), set has_content to false and leave the other fields empty."""
+
+
+import re as _re
+
+_NOISE = _re.compile(
+    r"""^\s*(?:
+        File\s+["'].*["'],\s*line\s+\d+       # traceback frame
+      | Traceback\s+\(most\s+recent\s+call     # traceback header
+      | In\s*\[\d*\]:?                         # IPython prompt
+      | Out\s*\[\d*\]:?
+      | runfile\(|debugfile\(                  # Spyder run commands
+      | exec\(compile\(|execfile\(
+      | [A-Za-z]:[\\/]\S*                      # Windows path
+      | (?:/[\w.\-]+){2,}/?\s*$                # Unix path on its own
+      | \#\s*-\*-\s*coding                     # encoding line
+      | @author\b|Created\s+on\b
+      | \.\.\.\s*$|-{3,}\s*$|\^+\s*$           # ellipsis, rulers, caret markers
+    )""", _re.X | _re.I)
+_LINE_NUMBER = _re.compile(r"^\s{0,3}\d{1,3}(?:\s|$)")
+
+
+def _clean_lines(text: str, *, code: bool = False) -> str:
+    lines = (text or "").replace("\r", "").split("\n")
+    if code:
+        numbered = [l for l in lines if l.strip()]
+        # Editor line numbers ("1 x = 10", "2 y = 0"): strip them when most lines have one.
+        if numbered and sum(bool(_LINE_NUMBER.match(l)) for l in numbered) >= 0.6 * len(numbered):
+            lines = [_LINE_NUMBER.sub("", l, count=1) if _LINE_NUMBER.match(l) else l for l in lines]
+    kept = [l.rstrip() for l in lines if not _NOISE.match(l)]
+    while kept and not kept[0].strip():
+        kept.pop(0)
+    out, blank = [], False
+    for l in kept:
+        if not l.strip():
+            if not blank and out:
+                out.append("")
+            blank = True
+        else:
+            out.append(l)
+            blank = False
+    while out and not out[-1].strip():
+        out.pop()
+    if code:
+        # Docstrings that only hold editor boilerplate ('"""' ... '"""' with nothing else).
+        joined = "\n".join(out)
+        joined = _re.sub(r'^\s*("""|\'\'\')\s*\n\s*\1\s*\n?', "", joined, flags=_re.M)
+        out = joined.split("\n") if joined else []
+    return "\n".join(out).strip("\n")
+
+
+def tidy_board(reading: BoardReading) -> BoardReading:
+    """Safety net after the model: drop screen noise it still copied, keep the lesson."""
+    text = _clean_lines(reading.text)
+    code = _clean_lines(reading.code, code=True)
+    output_lines = [l for l in _clean_lines(reading.output).split("\n") if l.strip()]
+    # For an error, the final "SomethingError: message" line is what matters.
+    errors = [l for l in output_lines if _re.match(r"^\s*\w+(?:Error|Exception)\b", l)]
+    output = "\n".join(errors[-1:] if errors else output_lines[-6:])
+    has = reading.has_content and bool(text or code or output or reading.formulas or reading.diagram)
+    return reading.model_copy(update={"text": text, "code": code, "output": output, "has_content": has})
+
+
+def board_key(reading: BoardReading) -> str:
+    """What a reading teaches, ignoring spacing: used to drop repeats of the same screen."""
+    return _re.sub(r"\s+", " ", f"{reading.text}|{reading.code}|{reading.output}").strip().lower()
 
 
 BOARD_TO_ENGLISH = """
@@ -80,7 +157,7 @@ def read_board(frame: Frame, to_english: bool = False, language: str = "auto") -
     ]
     if to_english:
         return _read_board_plain(prompt, language)
-    return _ask(BOARD_PROMPT, prompt, BoardReading, temperature=0.0, retries=1)
+    return tidy_board(_ask(BOARD_PROMPT, prompt, BoardReading, temperature=0.0, retries=1))
 
 
 BOARD_PLAIN_PROMPT = """You read one frame from a recorded lecture that is not in English.
@@ -164,6 +241,10 @@ def format_boards(boards: list[tuple[Frame, BoardReading]]) -> str:
         if not reading.has_content:
             continue
         parts = [reading.text.strip().replace("\n", " / ")]
+        if reading.code.strip():
+            parts.append("code: " + reading.code.strip().replace("\n", " ⏎ "))
+        if reading.output.strip():
+            parts.append("output: " + reading.output.strip().replace("\n", " / "))
         if reading.formulas:
             parts.append("formulas: " + "; ".join(reading.formulas))
         if reading.diagram:

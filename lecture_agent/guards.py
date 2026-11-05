@@ -153,7 +153,8 @@ def unverified_code(text: str, index) -> list[str]:
     is an empty loop in Python. The teacher had only said it out loud. Code can
     only be shown if read_board saw it, copied as it was.
     """
-    board = _squash(" ".join(b.get("text", "") + " " + " ".join(b.get("formulas", []))
+    board = _squash(" ".join(" ".join([b.get("text", ""), b.get("code", "") or "", b.get("output", "") or "",
+                                       " ".join(b.get("formulas", []))])
                              for b in getattr(index, "boards", []) or []))
     found = [a or b for a, b in CODE_SPAN.findall(text)]
     found += CODE_CALL.findall(CODE_SPAN.sub(" ", text))
