@@ -236,6 +236,8 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: var(--p
 .upload-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
 .upload-head h2 { margin: 0; font-size: 1.15rem; }
 .upload-card .alert { margin-bottom: 14px; }
+.demo-pass { display: grid; gap: 8px; margin-bottom: 14px; padding: 12px 14px; border-radius: 14px; background: var(--warn-soft); color: var(--ink-2); font-size: .85rem; line-height: 1.45; }
+.demo-pass input { width: 100%; }
 
 /* where the lecture comes from: file or YouTube */
 .source-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 16px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }

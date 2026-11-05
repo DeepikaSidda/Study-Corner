@@ -39,6 +39,52 @@ AUDIO_TYPES = {".mp3", ".wav", ".m4a", ".flac", ".ogg"}
 LECTURE_LANGUAGE = "auto"  # Transcribe identifies the language; non-English is translated to English
 NOTES_LANGUAGE = "English"
 JOB_ID = re.compile(r"^[0-9a-f]{12}$")
+
+# Demo mode, for a public server: set LECTURE_DEMO_PASSCODE. Everyone can open
+# the finished lectures; adding a lecture (upload or YouTube) needs the
+# passcode, and chat questions are capped so a public link can't run up the
+# AWS bill.
+DEMO_PASSCODE = os.environ.get("LECTURE_DEMO_PASSCODE") or None
+CHAT_PER_VISITOR = int(os.environ.get("LECTURE_CHAT_PER_VISITOR_PER_DAY", "20"))
+CHAT_PER_DAY = int(os.environ.get("LECTURE_CHAT_PER_DAY", "200"))
+_chat_counts: dict[str, int] = {}
+_chat_count_lock = threading.Lock()
+
+
+def _passcode_ok(value) -> bool:
+    import hmac
+
+    return DEMO_PASSCODE is None or hmac.compare_digest(str(value or "").encode(), DEMO_PASSCODE.encode())
+
+
+LOCKED = "Adding lectures on this demo needs the passcode from the submission form. The finished lectures below are open to everyone."
+
+
+def _client_ip(request: Request) -> str:
+    host = request.client.host if request.client else "?"
+    if host in ("127.0.0.1", "::1"):  # behind the local HTTPS proxy
+        forwarded = request.headers.get("x-forwarded-for", "")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
+    return host
+
+
+def _chat_allowed(ip: str, student: str) -> str | None:
+    """None if this chat question may run, else the reason it can't (demo mode only)."""
+    if DEMO_PASSCODE is None:
+        return None
+    day = time.strftime("%Y-%m-%d")
+    keys = (f"{day}|all", f"{day}|ip|{ip}", f"{day}|student|{student}")
+    with _chat_count_lock:
+        if _chat_counts.get(keys[0], 0) >= CHAT_PER_DAY:
+            return "The demo has answered its daily number of questions. Please try again tomorrow."
+        if max(_chat_counts.get(keys[1], 0), _chat_counts.get(keys[2], 0)) >= CHAT_PER_VISITOR:
+            return f"This demo allows {CHAT_PER_VISITOR} questions per visitor per day."
+        for k in keys:
+            _chat_counts[k] = _chat_counts.get(k, 0) + 1
+        for k in [k for k in _chat_counts if not k.startswith(day)]:
+            del _chat_counts[k]
+    return None
 FRAME_NAME = re.compile(r"^f_\d{5}\.jpg$")
 
 _lock = threading.Lock()
@@ -204,6 +250,10 @@ def _public(job: dict) -> dict:
     keys = ("id", "original_name", "status", "error", "created", "started", "finished", "options", "kind", "log",
             "source")
     out = {k: job.get(k) for k in keys}
+    # The S3 bucket name contains the AWS account number; keep it off the page.
+    out["log"] = [re.sub(r"s3://\S+", "s3://(private bucket)", line) for line in job.get("log", [])]
+    if out.get("error"):
+        out["error"] = re.sub(r"\b\d{12}\b", "(account)", out["error"])
     out["queue_position"] = list(_queued()).index(job["id"]) + 1 if job["status"] == "queued" else None
     return out
 
@@ -294,6 +344,11 @@ async def index(request: Request) -> HTMLResponse:
     return _page(
         "index.html",
         ACCOUNT=account,
+        DEMO=(
+            '<label class="demo-pass"><span>Demo: adding a lecture needs the passcode from the submission form. '
+            'The finished lectures below are open to everyone.</span>'
+            '<input type="password" id="passcode" placeholder="Passcode" autocomplete="off" maxlength="64"></label>'
+        ) if DEMO_PASSCODE else "",
         DISABLED=disabled,
         YT_DISABLED="" if yt_on else "disabled",
         YT_NOTE="" if yt_on else "YouTube links are switched off. Add YOUTUBE_API_KEY to the .env file to turn them on.",
@@ -312,6 +367,9 @@ async def index(request: Request) -> HTMLResponse:
 async def upload(request: Request) -> Response:
     if _account.get("error"):
         return HTMLResponse("AWS credentials are not usable.", status_code=503)
+    # Checked before the body is read, so a public demo never stores a stranger's upload.
+    if not _passcode_ok(request.headers.get("x-passcode")):
+        return HTMLResponse(LOCKED, status_code=403)
     length = int(request.headers.get("content-length") or 0)
     if length > MAX_UPLOAD_MB * 1024 * 1024:
         return HTMLResponse(f"File too large. The limit is {MAX_UPLOAD_MB} MB.", status_code=413)
@@ -383,6 +441,8 @@ async def youtube_check(request: Request) -> Response:
     if not youtube.enabled():
         return JSONResponse({"error": "YouTube links are switched off: add YOUTUBE_API_KEY to the .env file."},
                             status_code=503)
+    if not _passcode_ok(request.headers.get("x-passcode")):
+        return JSONResponse({"error": LOCKED}, status_code=403)
     try:
         plan = await run_in_threadpool(youtube.plan, request.query_params.get("url", ""))
     except youtube.YouTubeError as exc:
@@ -406,6 +466,8 @@ async def youtube_submit(request: Request) -> Response:
         return HTMLResponse("AWS credentials are not usable.", status_code=503)
     if not youtube.enabled():
         return HTMLResponse("YouTube links are switched off: add YOUTUBE_API_KEY to the .env file.", status_code=503)
+    if not _passcode_ok(request.headers.get("x-passcode")):
+        return HTMLResponse(LOCKED, status_code=403)
     form = await request.form(max_files=1, max_fields=5)
     try:
         questions = max(3, min(20, int(form.get("questions") or 10)))
@@ -620,6 +682,9 @@ async def chat_api(request: Request) -> Response:
         return JSONResponse({"error": "invalid student id"}, status_code=400)
     if not question or len(question) > chat.MAX_QUESTION_CHARS:
         return JSONResponse({"error": f"Ask a question of 1 to {chat.MAX_QUESTION_CHARS} characters."}, status_code=400)
+    refused = _chat_allowed(_client_ip(request), student)
+    if refused:
+        return JSONResponse({"error": refused}, status_code=429)
 
     def answer():
         with _chat_lock(job["id"], student):

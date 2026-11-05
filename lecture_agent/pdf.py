@@ -34,6 +34,8 @@ _FONT_CANDIDATES = [
     ("C:/Windows/Fonts/segoeui.ttf", "C:/Windows/Fonts/segoeuib.ttf"),
     ("C:/Windows/Fonts/arial.ttf", "C:/Windows/Fonts/arialbd.ttf"),
     ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    # Amazon Linux / Fedora (dnf install dejavu-sans-fonts)
+    ("/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf", "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf"),
     ("/Library/Fonts/Arial Unicode.ttf", None),
 ]
 _FALLBACK_CANDIDATES = [

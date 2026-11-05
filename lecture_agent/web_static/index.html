@@ -50,6 +50,7 @@
       </div>
 
       {{ACCOUNT}}
+      {{DEMO}}
 
       <div class="source-tabs" role="tablist" aria-label="Where the lecture comes from">
         <button type="button" role="tab" class="on" aria-selected="true" aria-controls="upload-form" data-src="file">
@@ -249,6 +250,14 @@
   });
   document.querySelector('.lectures-head a').addEventListener("click", ev => { ev.preventDefault(); showSource("file"); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => input.click(), 450); });
 
+  // ---------------------------------------------------------------- demo passcode
+  const passBox = document.getElementById("passcode");
+  if (passBox) {
+    passBox.value = sessionStorage.getItem("sc-passcode") || "";
+    passBox.addEventListener("input", () => sessionStorage.setItem("sc-passcode", passBox.value));
+  }
+  const passHeader = () => (passBox && passBox.value ? { "X-Passcode": passBox.value } : {});
+
   // ---------------------------------------------------------------- search (Amazon DynamoDB)
   const searchBox = document.getElementById("search");
   const results = document.getElementById("search-results");
@@ -343,7 +352,7 @@
     ytStatus.classList.add("busy");
     let body, status;
     try {
-      const res = await fetch(`/api/youtube?url=${encodeURIComponent(link)}`);
+      const res = await fetch(`/api/youtube?url=${encodeURIComponent(link)}`, { headers: passHeader() });
       status = res.status; body = await res.json();
     } catch {
       body = { error: "Couldn't reach the server. Is it still running?" };
@@ -404,7 +413,7 @@
     ytSubmit.disabled = true;
     ytSubmitText.textContent = "Starting…";
     try {
-      const res = await fetch(ytForm.action, { method: "POST", body: new FormData(ytForm) });
+      const res = await fetch(ytForm.action, { method: "POST", body: new FormData(ytForm), headers: passHeader() });
       if (res.ok && res.redirected && res.url.includes("/jobs/")) { window.location = res.url; return; }
       ytProblems.hidden = false;
       ytProblems.textContent = (await res.text()) || `Couldn't start (${res.status}).`;
@@ -427,6 +436,7 @@
     box.hidden = false;
     const xhr = new XMLHttpRequest();
     xhr.open("POST", form.action);
+    for (const [k, v] of Object.entries(passHeader())) xhr.setRequestHeader(k, v);
     xhr.upload.onprogress = e => {
       if (!e.lengthComputable) return;
       const pct = Math.round(100 * e.loaded / e.total);
