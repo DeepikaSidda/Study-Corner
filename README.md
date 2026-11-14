@@ -2,6 +2,7 @@
 
 **Watch less. Learn more.**
 *Turn any lecture video into notes, a quiz and a chat.*
+<img src="Study%20Corner_%20Watch%20Less,%20Learn%20More.png" alt="Study Corner" width="100%">
 
 Study Corner turns any lecture video into notes a student can trust: a
 summary, full notes, key terms, what was on the board, a checked quiz, and a
